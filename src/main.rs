@@ -116,6 +116,8 @@ impl Game {
                     if col_ptr == 7 {
                         col_ptr = 0;
                         row_ptr += 1;
+                    } else {
+                        return Result::Err(FenError::UnderfullLine { char_index: index });
                     }
 
                     if row_ptr > 8 {
