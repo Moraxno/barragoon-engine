@@ -1,6 +1,9 @@
+use std::arch::x86_64::_mm_cmpeq_pd;
+
 use strum::IntoEnumIterator;
 
 use navigation::Coordinate;
+use tiles::Step;
 
 use crate::tiles::TileType;
 use crate::navigation::Orientation;
@@ -74,7 +77,7 @@ impl BarragoonFace {
             return false;
         }
 
-        return match self {
+        match self {
             BF::ForceTurn => is_left_turn || is_right_turn,
             BF::Straight { alignment: BA::Vertical } => is_vertical,
             BF::Straight { alignment: BA::Horizontal } => is_horizontal,
@@ -88,11 +91,12 @@ impl BarragoonFace {
             BF::OneWayTurnRight {
                 orientation: barragoon_orientation,
             } => is_right_turn && leave == barragoon_orientation,
-        };
+        }
     }
 }
 
-struct Square<'a> {
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct SquareView<'a> {
     coordinate: Coordinate,
     content: &'a SquareContent
 }
@@ -100,20 +104,38 @@ struct Square<'a> {
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum SquareContent {
     Empty,
-    Tile(TileType, Player),
+    Tile(Tile),
     Barragoon(BarragoonFace),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+struct Tile {
+    tile_type: TileType,
+    player: Player
+}
+
+impl Tile {
+    pub fn to_fen_char(&self) -> char {
+        match self.player {
+            Player:: White => match self.tile_type {
+                TileType::Two => 'Z',
+                TileType::Three => 'D',
+                TileType::Four => 'V',
+            },
+            Player:: Brown => match self.tile_type {
+                TileType::Two => 'z',
+                TileType::Three => 'd',
+                TileType::Four => 'v',
+            },
+        }
+    }
 }
 
 impl SquareContent {
     pub fn to_fen_char(&self) -> char {
-        return match self {
+        match self {
             SC::Empty => ' ',
-            SC::Tile(TileType::Two, Player::White) => 'Z',
-            SC::Tile(TileType::Two, Player::Brown) => 'z',
-            SC::Tile(TileType::Three, Player::White) => 'D',
-            SC::Tile(TileType::Three, Player::Brown) => 'd',
-            SC::Tile(TileType::Four, Player::White) => 'V',
-            SC::Tile(TileType::Four, Player::Brown) => 'v',
+            SC::Tile(tile) => tile.to_fen_char(),
             SC::Barragoon(BF::ForceTurn) => '+',
             SC::Barragoon(BF::Straight { alignment: BA::Vertical }) => '|',
             SC::Barragoon(BF::Straight { alignment: BA::Horizontal }) => '-',
@@ -130,18 +152,19 @@ impl SquareContent {
             SC::Barragoon(BF::OneWayTurnRight { orientation: BO::North }) => 'n',
             SC::Barragoon(BF::OneWayTurnRight { orientation: BO::East }) => 'e',
             SC::Barragoon(BF::OneWayTurnRight { orientation: BO::West }) => 'w',
-        };
+        }
     }
 }
 
-const BOARD_WIDTH: i8 = 7;
-const BOARD_HEIGHT: i8 = 9;
+const BOARD_WIDTH: u8 = 7;
+const BOARD_HEIGHT: u8 = 9;
 
 type SC = SquareContent;
 
 #[derive(Debug, Copy, Clone)]
 struct Game {
     board: [[SC; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize],
+    current_player: Player
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -154,7 +177,7 @@ enum FenError {
 
 #[derive(Debug, Copy, Clone)]
 enum FenParseObject {
-    JumpCol(i8),
+    JumpCol(u8),
     SkipRow,
     Square(SquareContent),
     InvalidChar,
@@ -167,28 +190,36 @@ type BF = BarragoonFace;
 struct SquareIterator<'a> {
     owner_game: &'a Game,
 
-    ifile: usize,
-    irank: usize,
+    ifile: u8,
+    irank: u8,
 }
 
 impl<'a> Iterator for SquareIterator<'a> {
-    type Item = Square<'a>;
+    type Item = SquareView<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.ifile >= BOARD_WIDTH as usize {
+
+        if self.ifile >= BOARD_WIDTH {
             self.irank += 1;
+            self.ifile = 0;
         }
 
-        if self.irank >= BOARD_HEIGHT as usize {
-            None
+        let result : Option<Self::Item>;
+
+        if self.irank >= BOARD_HEIGHT {
+            result = None
         } else {
-            Some(
-                Square {
-                coordinate: Coordinate::new(self.irank as i8, self.ifile as i8),
-                content: &self.owner_game.board[self.irank][self.ifile]
+            result = Some(
+                SquareView {
+                coordinate: Coordinate::new(self.irank, self.ifile),
+                content: &self.owner_game.board[self.irank as usize][self.ifile as usize]
             })
             
         }
+
+        self.ifile += 1;
+
+        result
     }
 }
 
@@ -197,24 +228,28 @@ impl Game {
         Game::from_fen("1vd1dv1/2zdz2/7/1x3x1/x1x1x1x/1x3x1/7/2ZDZ2/1VD1DV1").unwrap()
     }
 
-    pub fn squares<'a>(&'a self) -> SquareIterator<'a> {
-        SquareIterator { owner_game: &self, ifile: 0, irank: 0 }
+    pub fn squares(&self) -> SquareIterator<'_> {
+        SquareIterator { owner_game: self, ifile: 0, irank: 0 }
+    }
+
+    pub fn get_content(&self, coordinate: &Coordinate) -> &SquareContent {
+        &self.board[coordinate.rank as usize][coordinate.file as usize]
     }
 
     pub fn from_fen(fen: &str) -> Result<Game, FenError> {
         let mut board: [[SC; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize] = [[SC::Empty; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize];
 
-        let mut row_ptr: i8 = BOARD_HEIGHT - 1;
-        let mut col_ptr: i8 = 0;
+        let mut row_ptr: i8 = BOARD_HEIGHT as i8 - 1;
+        let mut col_ptr: u8 = 0;
 
         for (index, c) in fen.char_indices() {
             let obj: FenParseObject = match c {
-                'Z' => FPO::Square(SC::Tile(TileType::Two, Player::White)),
-                'z' => FPO::Square(SC::Tile(TileType::Two, Player::Brown)),
-                'D' => FPO::Square(SC::Tile(TileType::Three, Player::White)),
-                'd' => FPO::Square(SC::Tile(TileType::Three, Player::Brown)),
-                'V' => FPO::Square(SC::Tile(TileType::Four, Player::White)),
-                'v' => FPO::Square(SC::Tile(TileType::Four, Player::Brown)),
+                'Z' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Two, player: Player::White })),
+                'z' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Two, player: Player::Brown })),
+                'D' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Three, player: Player::White })),
+                'd' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Three, player: Player::Brown })),
+                'V' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Four, player: Player::White })),
+                'v' => FPO::Square(SC::Tile(Tile { tile_type: TileType::Four, player: Player::Brown })),
                 '+' => FPO::Square(SC::Barragoon(BF::ForceTurn)),
                 '|' => FPO::Square(SC::Barragoon(BF::Straight { alignment: BA::Vertical })),
                 '-' => FPO::Square(SC::Barragoon(BF::Straight { alignment: BA::Horizontal })),
@@ -231,7 +266,7 @@ impl Game {
                 'n' => FPO::Square(SC::Barragoon(BF::OneWayTurnRight { orientation: BO::North })),
                 'e' => FPO::Square(SC::Barragoon(BF::OneWayTurnRight { orientation: BO::East })),
                 'w' => FPO::Square(SC::Barragoon(BF::OneWayTurnRight { orientation: BO::West })),
-                '1'..='7' => FPO::JumpCol(c.to_digit(10).map(|d| d as i8).unwrap()),
+                '1'..='7' => FPO::JumpCol(c.to_digit(10).map(|d| d as u8).unwrap()),
                 '/' => FPO::SkipRow,
                 _ => FPO::InvalidChar,
             };
@@ -265,7 +300,8 @@ impl Game {
             }
         }
 
-        return Ok(Game { board: board });
+        // todo: initialize player from fen string
+        Ok(Game { board, current_player: Player::White })
     }
 
     pub fn to_fen(&self) -> String {
@@ -299,42 +335,52 @@ impl Game {
         let mut moves = vec![];
 
         for square in self.squares() {
-            if let SC::Tile(tile, moving_piece_player) = square.content {
-                let full_strides = tile.full_strides();
+            if let SC::Tile(moving_tile) = square.content {
+                let Tile { tile_type: moving_tile_type, player: moving_piece_player } = moving_tile;
+
+                // skip other players pieces
+                if *moving_piece_player != self.current_player {
+                    continue;
+                }
+
+                let full_strides = moving_tile_type.full_strides();
 
                 for full_stride in full_strides {
-                    for ifullstep in 0..tile.full_stride_length() - 1 {
-                        let (new_orientation, coord_offset, is_last_step) = full_stride.step(ifullstep as u8);
-                        let new_coordinate = square.coordinate + coord_offset;
-                        if new_coordinate.rank >= BOARD_HEIGHT || new_coordinate.file >= BOARD_WIDTH || new_coordinate.rank < 0 || new_coordinate.file < 0 {
+                    for full_step in full_stride.steps() {
+                        let new_coordinate = square.coordinate + full_step.position_delta;
+                        if new_coordinate.rank >= BOARD_HEIGHT || new_coordinate.file >= BOARD_WIDTH {
                             //todo(robo) maybe breaking here is fine ... please test this later
                             continue 
                         }
 
-                        match square.content {
-                            SC::Tile(_, colliding_piece_player) => {
+                        let target_square_content = self.get_content(&new_coordinate);
+
+                        let is_last_step = full_step.leave_direction.is_none();
+
+                        match target_square_content {
+                            SC::Tile(attacked_tile) => {
+                                let Tile { tile_type: attacked_tile_type, player: colliding_piece_player} = attacked_tile;
                                 if moving_piece_player == colliding_piece_player || !is_last_step {
                                     break
                                 }
     
-                                moves.push(Move::TileCapture { start: square.coordinate, stop: new_coordinate });
+                                moves.push(Move::TileCapture { 
+                                    from: (*moving_tile, square.coordinate), 
+                                    to: (*attacked_tile, new_coordinate), 
+                                });
                             },
                             SC::Empty => {
                                 if is_last_step {
-                                    moves.push(Move::Straight { start: square.coordinate, stop: new_coordinate });
+                                    moves.push(Move::Straight { moving_tile: *moving_tile, start: square.coordinate, stop: new_coordinate });
                                 }
                             },
                             SC::Barragoon(face) => {
-                                if is_last_step && face.can_be_captured_by(*tile) && face.can_be_captured_from(&new_orientation) {
+                                if is_last_step && face.can_be_captured_by(*moving_tile_type) && face.can_be_captured_from(&full_step.enter_direction) {
                                     moves.push(Move::BarragoonCapture { start: square.coordinate, stop: new_coordinate });
-                                } else {
-                                    // todo! further
+                                } else if !face.can_be_traversed(&full_step.enter_direction, &full_step.leave_direction.unwrap()) {
+                                    break
                                 }
                             }
-                        }
-                        if let SC::Tile(_, colliding_piece_player) = square.content {
-                            // cannot collide in anyway with own pieces during move
-                            
                         }
                     }
                 }
@@ -350,7 +396,7 @@ impl std::fmt::Display for Game {
         for _ in 0..BOARD_WIDTH {
             write!(f, "+---")?;
         }
-        write!(f, "+\n")?;
+        writeln!(f, "+")?;
 
         for irank in (0..BOARD_HEIGHT as usize).rev() {
             let rank = self.board[irank];
@@ -364,7 +410,7 @@ impl std::fmt::Display for Game {
             for _ in 0..BOARD_WIDTH {
                 write!(f, "+---")?;
             }
-            write!(f, "+\n")?;
+            writeln!(f, "+")?;
         }
 
         write!(f, "  ")?;
@@ -392,12 +438,13 @@ impl std::fmt::Display for Coordinate {
 #[derive(Debug, Copy, Clone)]
 enum Move {
     Straight {
+        moving_tile: Tile,
         start: Coordinate,
         stop: Coordinate,
     },
     TileCapture {
-        start: Coordinate,
-        stop: Coordinate,
+        from: (Tile, Coordinate),
+        to: (Tile, Coordinate)
     },
     BarragoonCapture {
         start: Coordinate,
@@ -407,10 +454,10 @@ enum Move {
 
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Move::Straight { start, stop } = self {
-            f.write_fmt(format_args!("{}{}", start, stop))?;
-        } else if let Move::TileCapture { start, stop} = self {
-            f.write_fmt(format_args!("{}x{}", start, stop))?;
+        if let Move::Straight { moving_tile, start, stop } = self {
+            f.write_fmt(format_args!("{}{}{}", moving_tile.to_fen_char(), start, stop))?;
+        } else if let Move::TileCapture { from: (attacker, start), to: (victim, stop)} = self {
+            f.write_fmt(format_args!("{}{}x{}{}", attacker.to_fen_char(), start, victim.to_fen_char(), stop))?;
         }
 
         write!(f, "")
@@ -433,14 +480,11 @@ fn main() {
     println!("{:?}", TileType::Three.full_strides());
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tiles_move_strides() {
-        assert_eq!(TileType::Two.full_strides().len(), 3 * 4);
-        assert_eq!(TileType::Three.full_strides().len(), 5 * 4);
-        assert_eq!(TileType::Four.full_strides().len(), 7 * 4);
+#[test]
+    fn initial_gamestate_allowed_moves() {
+        let moves = Game::new().valid_moves();
+        for move_ in &moves {
+            println!("{}", move_);
+        }
+        assert_eq!(moves.len(), 17)        
     }
-}
