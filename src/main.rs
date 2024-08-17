@@ -1,129 +1,19 @@
 use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum TileType {
-    Two,
-    Three,
-    Four,
-}
+use navigation::Coordinate;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-struct Stride {
-    start_direction: Orientation,
-    start_length: i8,
-    bend_direction: Orientation,
-    bend_length: i8,
-}
+use crate::tiles::TileType;
+use crate::navigation::Orientation;
 
-impl Stride {
-    pub fn new_bend(start_direction: Orientation, start_length: i8, bend_direction: Orientation, bend_length: i8) -> Stride {
-        Stride {
-            start_direction,
-            start_length,
-            bend_direction,
-            bend_length,
-        }
-    }
-
-    pub fn new_straight(start_direction: Orientation, start_length: i8) -> Stride {
-        Stride {
-            start_direction,
-            start_length,
-            bend_direction: start_direction,
-            bend_length: 0,
-        }
-    }
-}
-
-impl TileType {
-    pub fn full_stride_length(&self) -> i8 {
-        match self {
-            TileType::Two => 2,
-            TileType::Three => 3,
-            TileType::Four => 4,
-        }
-    }
-
-    pub fn short_stride_length(&self) -> i8 {
-        match self {
-            TileType::Two => 1,
-            TileType::Three => 2,
-            TileType::Four => 3,
-        }
-    }
-
-    pub fn full_strides(&self) -> Vec<Stride> {
-        let stride = self.full_stride_length();
-        let mut all_strides = vec![];
-
-        for start_direction in Orientation::iter() {
-            for bend_point in 0..stride {
-                let possible_directions: Vec<Orientation>;
-                if bend_point != 0 {
-                    all_strides.push(Stride::new_bend(
-                        start_direction,
-                        bend_point,
-                        start_direction.turn_left(),
-                        stride - bend_point,
-                    ));
-                    all_strides.push(Stride::new_bend(
-                        start_direction,
-                        bend_point,
-                        start_direction.turn_right(),
-                        stride - bend_point,
-                    ));
-                } else {
-                    all_strides.push(Stride::new_straight(start_direction, bend_point));
-                }
-            }
-        }
-
-        all_strides
-    }
-}
+pub mod tiles;
+pub mod navigation;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum Player {
     White,
     Brown,
 }
-#[derive(Debug, Copy, Clone, PartialEq, EnumIter)]
-enum Orientation {
-    North,
-    West,
-    South,
-    East,
-}
 
-impl Orientation {
-    pub fn turn_left(&self) -> Orientation {
-        match self {
-            Orientation::North => Orientation::West,
-            Orientation::West => Orientation::South,
-            Orientation::South => Orientation::East,
-            Orientation::East => Orientation::North,
-        }
-    }
-
-    pub fn turn_right(&self) -> Orientation {
-        match self {
-            Orientation::North => Orientation::East,
-            Orientation::East => Orientation::South,
-            Orientation::South => Orientation::West,
-            Orientation::West => Orientation::North,
-        }
-    }
-
-    pub fn as_rank_file_tuple(&self) -> (i8, i8) {
-        match self {
-            Orientation::North => (1, 0),
-            Orientation::East => (0, 1),
-            Orientation::South => (-1, 0),
-            Orientation::West => (0, -1),
-        }
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum BarragoonAlignment {
@@ -161,6 +51,10 @@ impl BarragoonFace {
         }
     }
 
+    pub fn can_be_captured_by(&self, tile_type: TileType) -> bool{
+        tile_type != TileType::Two || *self != BF::ForceTurn
+    }
+
     pub fn can_be_traversed(&self, enter: &Orientation, leave: &Orientation) -> bool {
         let is_horizontal = *enter == BO::East && *leave == BO::West || *enter == BO::West && *leave == BO::East;
 
@@ -196,6 +90,11 @@ impl BarragoonFace {
             } => is_right_turn && leave == barragoon_orientation,
         };
     }
+}
+
+struct Square<'a> {
+    coordinate: Coordinate,
+    content: &'a SquareContent
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -265,9 +164,41 @@ type BA = BarragoonAlignment;
 type BO = Orientation;
 type BF = BarragoonFace;
 
+struct SquareIterator<'a> {
+    owner_game: &'a Game,
+
+    ifile: usize,
+    irank: usize,
+}
+
+impl<'a> Iterator for SquareIterator<'a> {
+    type Item = Square<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.ifile >= BOARD_WIDTH as usize {
+            self.irank += 1;
+        }
+
+        if self.irank >= BOARD_HEIGHT as usize {
+            None
+        } else {
+            Some(
+                Square {
+                coordinate: Coordinate::new(self.irank as i8, self.ifile as i8),
+                content: &self.owner_game.board[self.irank][self.ifile]
+            })
+            
+        }
+    }
+}
+
 impl Game {
     pub fn new() -> Game {
         Game::from_fen("1vd1dv1/2zdz2/7/1x3x1/x1x1x1x/1x3x1/7/2ZDZ2/1VD1DV1").unwrap()
+    }
+
+    pub fn squares<'a>(&'a self) -> SquareIterator<'a> {
+        SquareIterator { owner_game: &self, ifile: 0, irank: 0 }
     }
 
     pub fn from_fen(fen: &str) -> Result<Game, FenError> {
@@ -367,22 +298,48 @@ impl Game {
     pub fn valid_moves(&self) -> Vec<Move> {
         let mut moves = vec![];
 
-        for irow in 0i8..BOARD_HEIGHT {
-            for icol in 0i8..BOARD_WIDTH {
-                let square = self.board[irow as usize][icol as usize];
+        for square in self.squares() {
+            if let SC::Tile(tile, moving_piece_player) = square.content {
+                let full_strides = tile.full_strides();
 
-                if let SC::Tile(tile, player) = square {
-                    let all_strides = tile.full_strides();
+                for full_stride in full_strides {
+                    for ifullstep in 0..tile.full_stride_length() - 1 {
+                        let (new_orientation, coord_offset, is_last_step) = full_stride.step(ifullstep as u8);
+                        let new_coordinate = square.coordinate + coord_offset;
+                        if new_coordinate.rank >= BOARD_HEIGHT || new_coordinate.file >= BOARD_WIDTH || new_coordinate.rank < 0 || new_coordinate.file < 0 {
+                            //todo(robo) maybe breaking here is fine ... please test this later
+                            continue 
+                        }
 
-                    for stride in all_strides {
-                        for i in 0..stride.start_length {
+                        match square.content {
+                            SC::Tile(_, colliding_piece_player) => {
+                                if moving_piece_player == colliding_piece_player || !is_last_step {
+                                    break
+                                }
+    
+                                moves.push(Move::TileCapture { start: square.coordinate, stop: new_coordinate });
+                            },
+                            SC::Empty => {
+                                if is_last_step {
+                                    moves.push(Move::Straight { start: square.coordinate, stop: new_coordinate });
+                                }
+                            },
+                            SC::Barragoon(face) => {
+                                if is_last_step && face.can_be_captured_by(*tile) && face.can_be_captured_from(&new_orientation) {
+                                    moves.push(Move::BarragoonCapture { start: square.coordinate, stop: new_coordinate });
+                                } else {
+                                    // todo! further
+                                }
+                            }
+                        }
+                        if let SC::Tile(_, colliding_piece_player) = square.content {
+                            // cannot collide in anyway with own pieces during move
                             
                         }
                     }
                 }
             }
         }
-
         moves
     }
 }
@@ -419,11 +376,6 @@ impl std::fmt::Display for Game {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct Coordinate {
-    rank: i8,
-    file: i8,
-}
 
 const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const FILES_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
@@ -443,23 +395,22 @@ enum Move {
         start: Coordinate,
         stop: Coordinate,
     },
-    Bend {
+    TileCapture {
         start: Coordinate,
         stop: Coordinate,
-        bends_left: bool,
     },
+    BarragoonCapture {
+        start: Coordinate,
+        stop: Coordinate,
+    }
 }
 
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Move::Straight { start, stop } = self {
             f.write_fmt(format_args!("{}{}", start, stop))?;
-        } else if let Move::Bend { start, stop, bends_left } = self {
-            let mut bend_char = 'R';
-            if *bends_left {
-                bend_char = 'L';
-            }
-            f.write_fmt(format_args!("{}{}{}", start, bend_char, stop))?;
+        } else if let Move::TileCapture { start, stop} = self {
+            f.write_fmt(format_args!("{}x{}", start, stop))?;
         }
 
         write!(f, "")
