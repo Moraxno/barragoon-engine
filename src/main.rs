@@ -1,4 +1,5 @@
 use std::arch::x86_64::_mm_cmpeq_pd;
+use std::collections::{HashMap, HashSet};
 
 use strum::IntoEnumIterator;
 
@@ -11,19 +12,19 @@ use crate::navigation::Orientation;
 pub mod tiles;
 pub mod navigation;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Player {
     White,
     Brown,
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum BarragoonAlignment {
     Horizontal,
     Vertical,
 }
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum BarragoonFace {
     Blocking,
     Straight { alignment: BarragoonAlignment },
@@ -95,20 +96,20 @@ impl BarragoonFace {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct SquareView<'a> {
     coordinate: Coordinate,
     content: &'a SquareContent
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum SquareContent {
     Empty,
     Tile(Tile),
     Barragoon(BarragoonFace),
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct Tile {
     tile_type: TileType,
     player: Player
@@ -358,9 +359,10 @@ impl Game {
                         let is_last_step = full_step.leave_direction.is_none();
 
                         match target_square_content {
+                            
                             SC::Tile(attacked_tile) => {
                                 let Tile { tile_type: attacked_tile_type, player: colliding_piece_player} = attacked_tile;
-                                if moving_piece_player == colliding_piece_player || !is_last_step {
+                                if (moving_piece_player == colliding_piece_player) || !is_last_step {
                                     break
                                 }
     
@@ -435,7 +437,7 @@ impl std::fmt::Display for Coordinate {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Move {
     Straight {
         moving_tile: Tile,
@@ -480,11 +482,27 @@ fn main() {
     println!("{:?}", TileType::Three.full_strides());
 }
 
-#[test]
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use crate::Tile;
+
+    use super::*;
+
+    #[test]
+
     fn initial_gamestate_allowed_moves() {
         let moves = Game::new().valid_moves();
-        for move_ in &moves {
-            println!("{}", move_);
-        }
         assert_eq!(moves.len(), 17)        
     }
+
+    #[test]
+    fn initial_gamestate_moves_are_unique() {
+        let moves = Game::new().valid_moves();
+        let unique_moves: HashSet<Move> = moves.clone().into_iter().collect();
+
+        assert_eq!(moves.len(), unique_moves.len())
+    }
+}

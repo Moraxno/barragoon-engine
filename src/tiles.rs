@@ -1,10 +1,12 @@
 use std::{fmt::Display, hash::Hash};
+use std::fmt::Write;
+
 
 use crate::navigation::{Coordinate, Orientation, PositionDelta};
 use strum_macros::EnumIter;
 use strum::IntoEnumIterator;
 
-#[derive(Debug, Copy, Clone, PartialEq, EnumIter)]
+#[derive(Debug, Copy, Clone, PartialEq, EnumIter, Eq, Hash)]
 pub enum TileType {
     Two,
     Three,
@@ -78,7 +80,7 @@ impl<'a> StrideIterator<'a> {
             ref_stride: stride,
             index: 0,
             last_direction: stride.start_direction,
-            position_delta: PositionDelta::new()
+            position_delta: PositionDelta::zero()
         }
     }
 }
@@ -150,6 +152,12 @@ impl Stride {
        StrideIterator::new(&self)
     }
 
+    pub fn to_string(&self) -> String {
+        let mut s = String::new();
+        write!(s, "{}", self).unwrap();
+        s
+    }
+
 }
 
 impl std::fmt::Display for Stride {
@@ -178,6 +186,7 @@ mod tests {
         assert_eq!(TileType::Four.full_strides().len(), 7 * 4);
     }
 
+    #[test]
     fn tiles_moves_are_unique() {
         for tile_type in TileType::iter() {
             let strides = tile_type.full_strides();
