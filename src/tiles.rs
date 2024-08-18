@@ -1,10 +1,9 @@
+use std::fmt::{write, Write};
 use std::{fmt::Display, hash::Hash};
-use std::fmt::Write;
-
 
 use crate::navigation::{Coordinate, Orientation, PositionDelta};
-use strum_macros::EnumIter;
 use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 #[derive(Debug, Copy, Clone, PartialEq, EnumIter, Eq, Hash)]
 pub enum TileType {
@@ -30,30 +29,52 @@ impl TileType {
         }
     }
 
-    pub fn full_strides(&self) -> Vec<Stride> {
-        let stride = self.full_stride_length();
+    fn make_strides(&self, are_full_strides: bool) -> Vec<Stride> {
+        let stride_length: u8;
+        if are_full_strides {
+            stride_length = self.full_stride_length();
+        } else {
+            stride_length = self.short_stride_length();
+        }
+
         let mut all_strides = vec![];
 
         for start_direction in Orientation::iter() {
-            for bend_point in 0..stride {
+            for bend_point in 0..stride_length {
                 if bend_point != 0 {
                     all_strides.push(Stride::new_bend(
                         start_direction,
                         bend_point,
                         start_direction.turn_left(),
-                        stride - bend_point,
+                        stride_length - bend_point,
+                        are_full_strides,
                     ));
                     all_strides.push(Stride::new_bend(
                         start_direction,
                         bend_point,
                         start_direction.turn_right(),
-                        stride - bend_point,
+                        stride_length - bend_point,
+                        are_full_strides,
                     ));
                 } else {
-                    all_strides.push(Stride::new_straight(start_direction, stride));
+                    all_strides.push(Stride::new_straight(start_direction, stride_length, are_full_strides));
                 }
             }
         }
+        all_strides
+    }
+
+    pub fn full_strides(&self) -> Vec<Stride> {
+        self.make_strides(true)
+    }
+
+    pub fn short_strides(&self) -> Vec<Stride> {
+        self.make_strides(false)
+    }
+
+    pub fn all_strides(&self) -> Vec<Stride> {
+        let mut all_strides = self.full_strides();
+        all_strides.append(&mut self.short_strides());
 
         all_strides
     }
@@ -65,13 +86,20 @@ pub struct Stride {
     start_length: u8,
     bend_direction: Orientation,
     bend_length: u8,
+    is_full_stride: bool,
+}
+
+impl Stride {
+    pub fn can_capture(&self) -> bool {
+        self.is_full_stride
+    }
 }
 
 pub struct StrideIterator<'a> {
     ref_stride: &'a Stride,
     index: u8,
     last_direction: Orientation,
-    position_delta: PositionDelta
+    position_delta: PositionDelta,
 }
 
 impl<'a> StrideIterator<'a> {
@@ -80,7 +108,7 @@ impl<'a> StrideIterator<'a> {
             ref_stride: stride,
             index: 0,
             last_direction: stride.start_direction,
-            position_delta: PositionDelta::zero()
+            position_delta: PositionDelta::zero(),
         }
     }
 }
@@ -89,7 +117,19 @@ impl<'a> StrideIterator<'a> {
 pub struct Step {
     pub enter_direction: Orientation,
     pub leave_direction: Option<Orientation>,
-    pub position_delta: PositionDelta
+    pub position_delta: PositionDelta,
+}
+
+impl std::fmt::Display for Step {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut leave_str = String::new();
+        if let Some(orientation) = self.leave_direction {
+            write!(leave_str, "{}", orientation)?;
+        } else {
+            write!(leave_str, "X")?;
+        }
+        write!(f, "{}>{}:{}", self.enter_direction, leave_str, self.position_delta)
+    }
 }
 
 impl<'a> Iterator for StrideIterator<'a> {
@@ -102,7 +142,7 @@ impl<'a> Iterator for StrideIterator<'a> {
 
         let leave_direction: Option<Orientation>;
 
-        if self.index < self.ref_stride.start_length {
+        if self.index < self.ref_stride.start_length - 1 {
             leave_direction = Some(self.ref_stride.start_direction);
         } else if self.index < self.ref_stride.start_length + self.ref_stride.bend_length - 1 {
             leave_direction = Some(self.ref_stride.bend_direction);
@@ -112,7 +152,7 @@ impl<'a> Iterator for StrideIterator<'a> {
 
         self.position_delta = self.position_delta + self.last_direction.as_delta();
 
-        let result = Some ( Step {
+        let result = Some(Step {
             enter_direction: self.last_direction,
             leave_direction: leave_direction,
             position_delta: self.position_delta,
@@ -125,31 +165,38 @@ impl<'a> Iterator for StrideIterator<'a> {
         self.index += 1;
 
         return result;
-        
     }
 }
 
 impl Stride {
-    pub fn new_bend(start_direction: Orientation, start_length: u8, bend_direction: Orientation, bend_length: u8) -> Stride {
+    pub fn new_bend(
+        start_direction: Orientation,
+        start_length: u8,
+        bend_direction: Orientation,
+        bend_length: u8,
+        is_full_stride: bool,
+    ) -> Stride {
         Stride {
             start_direction,
             start_length,
             bend_direction,
             bend_length,
+            is_full_stride,
         }
     }
 
-    pub fn new_straight(start_direction: Orientation, start_length: u8) -> Stride {
+    pub fn new_straight(start_direction: Orientation, start_length: u8, is_full_stride: bool) -> Stride {
         Stride {
             start_direction,
             start_length,
             bend_direction: start_direction,
             bend_length: 0,
+            is_full_stride,
         }
     }
 
     pub fn steps(&self) -> StrideIterator {
-       StrideIterator::new(&self)
+        StrideIterator::new(&self)
     }
 
     pub fn to_string(&self) -> String {
@@ -158,12 +205,19 @@ impl Stride {
         s
     }
 
+    pub fn full_delta(&self) -> PositionDelta {
+        self.start_direction.as_delta() * self.start_length as i8 + self.bend_direction.as_delta() * self.bend_length as i8
+    }
 }
 
 impl std::fmt::Display for Stride {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.bend_length > 0 {
-            write!(f, "{}{}{}{}", self.start_direction, self.start_length, self.bend_direction, self.bend_length)
+            write!(
+                f,
+                "{}{}{}{}",
+                self.start_direction, self.start_length, self.bend_direction, self.bend_length
+            )
         } else {
             write!(f, "{}{}", self.start_direction, self.start_length)
         }
@@ -174,13 +228,12 @@ impl std::fmt::Display for Stride {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::Tile;
+    use crate::{Game, SquareContent, Tile};
 
     use super::*;
 
     #[test]
     fn tiles_move_strides_count() {
-        
         assert_eq!(TileType::Two.full_strides().len(), 3 * 4);
         assert_eq!(TileType::Three.full_strides().len(), 5 * 4);
         assert_eq!(TileType::Four.full_strides().len(), 7 * 4);
@@ -203,6 +256,63 @@ mod tests {
                 assert_eq!(steps.len(), tile_type.full_stride_length().into())
             }
         }
-        
+    }
+
+    #[test]
+    fn single_tile_on_board_has_all_valid_moves() {
+        for tile_type in TileType::iter() {
+            let mut game = crate::Game::empty();
+            game.board[4][3] = SquareContent::Tile(Tile {
+                tile_type,
+                player: crate::Player::White,
+            });
+            let moves = game.valid_moves();
+
+            match tile_type {
+                TileType::Two => assert_eq!(moves.len(), 4 + 8),
+                TileType::Three => assert_eq!(moves.len(), 8 + 12),
+                TileType::Four => assert_eq!(moves.len(), 12 + 14), // Four collides with sides of the board
+            }
+        }
+    }
+
+    #[test]
+    fn straight_stride_deltas_are_consistent() {
+        assert_eq!(
+            Stride::new_straight(Orientation::East, 7, true).full_delta(),
+            PositionDelta::new(0, 7)
+        );
+        assert_eq!(
+            Stride::new_straight(Orientation::West, 3, false).full_delta(),
+            PositionDelta::new(0, -3)
+        );
+        assert_eq!(
+            Stride::new_straight(Orientation::North, 4, true).full_delta(),
+            PositionDelta::new(4, 0)
+        );
+        assert_eq!(
+            Stride::new_straight(Orientation::South, 5, false).full_delta(),
+            PositionDelta::new(-5, 0)
+        );
+    }
+
+    #[test]
+    fn bend_stride_deltas_are_consistent() {
+        assert_eq!(
+            Stride::new_bend(Orientation::East, 7, Orientation::North, 2, true).full_delta(),
+            PositionDelta::new(2, 7)
+        );
+        assert_eq!(
+            Stride::new_bend(Orientation::West, 3, Orientation::South, 4, false).full_delta(),
+            PositionDelta::new(-4, -3)
+        );
+        assert_eq!(
+            Stride::new_bend(Orientation::North, 4, Orientation::East, 6, true).full_delta(),
+            PositionDelta::new(4, 6)
+        );
+        assert_eq!(
+            Stride::new_bend(Orientation::South, 5, Orientation::West, 8, false).full_delta(),
+            PositionDelta::new(-5, -8)
+        );
     }
 }

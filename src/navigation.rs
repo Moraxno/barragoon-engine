@@ -2,6 +2,8 @@ use strum_macros::EnumIter;
 
 use std::ops;
 
+use crate::{BOARD_HEIGHT, BOARD_WIDTH, FILE_NAMES, RANK_NAMES};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum Orientation {
     North,
@@ -64,18 +66,39 @@ pub struct PositionDelta {
 
 impl PositionDelta {
     pub fn new(rank_delta: i8, file_delta: i8) -> PositionDelta {
-        PositionDelta { file_delta, rank_delta}
+        PositionDelta { file_delta, rank_delta }
     }
 
     pub fn zero() -> PositionDelta {
         PositionDelta::new(0, 0)
     }
+}
 
+impl std::fmt::Display for PositionDelta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "d({},{})", self.rank_delta, self.file_delta)
+    }
 }
 
 impl Coordinate {
-    pub fn new (rank: u8, file: u8) -> Coordinate {
-        Coordinate {rank, file}
+    pub fn new(rank: u8, file: u8) -> Coordinate {
+        Coordinate { rank, file }
+    }
+}
+
+impl std::fmt::Display for Coordinate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.file >= BOARD_WIDTH {
+            write!(f, "?")?;
+        } else {
+            write!(f, "{}", FILE_NAMES[self.file as usize])?;
+        }
+
+        if self.rank >= BOARD_HEIGHT {
+            write!(f, "?")
+        } else {
+            write!(f, "{}", RANK_NAMES[self.rank as usize])
+        }
     }
 }
 
@@ -83,7 +106,7 @@ impl ops::Add<PositionDelta> for Coordinate {
     type Output = Self;
 
     fn add(self, rhs: PositionDelta) -> Self::Output {
-        Coordinate { rank: (self.rank as i8 + rhs.rank_delta) as u8, file: (self.file as i8 + rhs.file_delta) as u8 }
+        Coordinate::new((self.rank as i8 + rhs.rank_delta) as u8, (self.file as i8 + rhs.file_delta) as u8)
     }
 }
 
@@ -91,15 +114,15 @@ impl ops::Sub<PositionDelta> for Coordinate {
     type Output = Self;
 
     fn sub(self, rhs: PositionDelta) -> Self::Output {
-        Coordinate { rank: (self.rank as i8 - rhs.rank_delta) as u8, file: (self.file as i8 - rhs.file_delta) as u8 }
+        Coordinate::new((self.rank as i8 - rhs.rank_delta) as u8, (self.file as i8 - rhs.file_delta) as u8)
     }
 }
 
 impl ops::Sub<Coordinate> for Coordinate {
-    type Output= PositionDelta;
+    type Output = PositionDelta;
 
     fn sub(self, rhs: Coordinate) -> Self::Output {
-        PositionDelta { rank_delta: self.rank as i8 - rhs.rank as i8, file_delta: self.file as i8 - rhs.file as i8 }
+        PositionDelta::new(self.rank as i8 - rhs.rank as i8, self.file as i8 - rhs.file as i8)
     }
 }
 
@@ -107,7 +130,7 @@ impl ops::Add<PositionDelta> for PositionDelta {
     type Output = Self;
 
     fn add(self, rhs: PositionDelta) -> Self::Output {
-        PositionDelta { rank_delta: self.rank_delta + rhs.rank_delta, file_delta: self.file_delta + rhs.file_delta}
+        PositionDelta::new(self.rank_delta + rhs.rank_delta, self.file_delta + rhs.file_delta)
     }
 }
 
@@ -115,7 +138,7 @@ impl ops::Sub<PositionDelta> for PositionDelta {
     type Output = Self;
 
     fn sub(self, rhs: PositionDelta) -> Self::Output {
-        PositionDelta { rank_delta: self.rank_delta - rhs.rank_delta, file_delta: self.file_delta - rhs.file_delta}
+        PositionDelta::new(self.rank_delta - rhs.rank_delta, self.file_delta - rhs.file_delta)
     }
 }
 
@@ -123,10 +146,9 @@ impl ops::Mul<i8> for PositionDelta {
     type Output = Self;
 
     fn mul(self, rhs: i8) -> Self::Output {
-        PositionDelta { rank_delta: self.rank_delta * rhs, file_delta: self.file_delta * rhs }
+        PositionDelta::new(self.rank_delta * rhs, self.file_delta * rhs)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -171,5 +193,4 @@ mod tests {
         assert_eq!(PositionDelta::new(0, 0) * -1, PositionDelta::new(0, 0));
         assert_eq!(PositionDelta::new(0, 0) * 0, PositionDelta::new(0, 0));
     }
-
 }
