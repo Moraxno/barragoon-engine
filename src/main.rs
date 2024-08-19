@@ -1,5 +1,6 @@
 use std::arch::x86_64::_mm_cmpeq_pd;
 use std::collections::{HashMap, HashSet};
+use std::io;
 
 use strum::IntoEnumIterator;
 
@@ -540,7 +541,7 @@ fn main() {
 
     println!("{:?}", TileType::Three.full_strides());
 
-    ubi_loop();
+    ubi_loop(&mut io::stdin());
 }
 
 #[cfg(test)]

@@ -1,4 +1,8 @@
-use std::{future::Ready, io, str::SplitWhitespace};
+use std::{
+    future::Ready,
+    io::{self, Read},
+    str::SplitWhitespace,
+};
 
 use crate::{FenError, Game};
 
@@ -80,7 +84,10 @@ impl UbiHandler {
     }
 }
 
-pub fn ubi_loop() -> io::Result<()> {
+pub fn ubi_loop<T>(&mut buffer: T) -> io::Result<()>
+where
+    T: Read,
+{
     println!("Barragoon Engine v0.1");
     println!("Now listening for UBI commands ...");
 
@@ -90,7 +97,7 @@ pub fn ubi_loop() -> io::Result<()> {
 
     loop {
         input_buffer.clear();
-        io::stdin().read_line(&mut input_buffer)?;
+        buffer.read_line(&mut input_buffer)?;
         let input = input_buffer.trim_end();
 
         let mut args = input.split_whitespace();
@@ -101,8 +108,15 @@ pub fn ubi_loop() -> io::Result<()> {
                 "ubi" => handler.ubi(),
                 "isready" => handler.isready(),
                 "position" => handler.position(args).unwrap(),
+                "exit" => std::process::exit(0),
                 _ => println!("Unknown command \"{}\"", cmd),
             }
         }
     }
+}
+
+#[cfg(tests)]
+mod tests {
+    #[test]
+    pub fn detect_ubi() {}
 }
