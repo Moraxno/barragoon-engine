@@ -1,6 +1,6 @@
 use std::arch::x86_64::_mm_cmpeq_pd;
 use std::collections::{HashMap, HashSet};
-use std::io;
+use std::io::{self, BufReader};
 
 use strum::IntoEnumIterator;
 
@@ -541,7 +541,9 @@ fn main() {
 
     println!("{:?}", TileType::Three.full_strides());
 
-    ubi_loop(&mut io::stdin());
+    let mut buf_stdin = BufReader::new(io::stdin());
+
+    ubi_loop(&mut buf_stdin, &mut io::stdout());
 }
 
 #[cfg(test)]
