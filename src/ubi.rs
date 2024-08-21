@@ -29,13 +29,16 @@ impl UbiHandler {
         }
     }
 
-    pub fn ubi(&mut self) -> Option<&str> {
+    pub fn ubi(&mut self) -> Vec<&str> {
+        let mut answers = vec![];
+
         match self.state {
             UbiState::Unitialized => {
-                println!("id name {} author {}", "Barragoon-Engine v0.1", "Moraxno");
-                println!("ubiok");
-
                 self.state = UbiState::WaitingForReady;
+
+                let answer = String::new();
+
+                write!(answer, "id name {} author {}", "Barragoon-Engine v0.1", "Moraxno")
 
                 Some("id name Barragoon-Engine v0.1 author Moraxno\nubiok")
             }
@@ -43,20 +46,23 @@ impl UbiHandler {
         }
     }
 
-    pub fn isready(&mut self) -> Option<&str> {
+    pub fn isready(&mut self) -> Vec<&str> {
+        let mut answers = vec![];
         match self.state {
-            UbiState::Unitialized => None,
+            UbiState::Unitialized => (),
             UbiState::WaitingForReady =>
             /* initialize self ... */ /* after that ... */
             {
                 self.state = UbiState::Ready;
-                Some("readyok")
-            }
-            _ => Some("readyok")
-        }
+                answers.push("readyok");
+            },
+            _ => answers.push("readyok"),
+        };
+
+        answers
     }
 
-    pub fn position(&mut self, mut args: SplitWhitespace) -> Option<&str> {
+    pub fn position(&mut self, mut args: SplitWhitespace) -> Vec<&str> {
         let start_position_mode = args.next();
 
         match start_position_mode {
@@ -68,7 +74,7 @@ impl UbiHandler {
         // println!("{}", self.game);
 
         self.state = UbiState::PositionSet;
-        None
+        vec![]
     }
 
     fn collect_residual_fen_args(&self, residual_args: &mut SplitWhitespace) -> String {
@@ -92,8 +98,8 @@ where
     S: Read + BufRead,
     T: Write,
 {
-    println!("Barragoon Engine v0.1");
-    println!("Now listening for UBI commands ...");
+    writeln!(output, "Barragoon Engine v0.1")?;
+    writeln!(output, "Now listening for UBI commands ...")?;
 
     let mut handler = UbiHandler::new();
 
@@ -211,9 +217,7 @@ mod tests {
 
     use super::ubi_loop;
 
-    #[test]
-    pub fn detect_ubi() {
-
+    fn connect_to_ubi_loop() -> (SyncWriter, BufReader<SyncReader>, std::thread::JoinHandle<Result<(), std::io::Error>>) {
         let (input_tx, input_rx) = mpsc::channel();
         let (output_tx, output_rx) = mpsc::channel();
         
@@ -223,9 +227,17 @@ mod tests {
         let mut output_send = SyncWriter::new(output_tx);
         let mut output_recv = BufReader::new(SyncReader::new(output_rx));
 
-        let t = thread::spawn(move | | {
+        let ubi_thread = thread::spawn(move | | {
             ubi_loop(&mut input_recv, &mut output_send)
         });
+
+        (input_send, output_recv, ubi_thread)
+    }
+
+    #[test]
+    pub fn detect_ubi() {
+
+        connect_to_ubi_loop();
 
         thread::sleep(Duration::from_millis(100));
         writeln!(input_send, "ubi").unwrap();
