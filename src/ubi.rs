@@ -95,9 +95,7 @@ impl UbiHandler {
         let mut fen_string = String::new();
 
         for arg in residual_args {
-            if arg == "moves" {
-                break;
-            }
+            if arg == "moves" { break; }
             fen_string.push_str(arg);
         }
 
