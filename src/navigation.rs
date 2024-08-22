@@ -5,14 +5,14 @@ use std::ops;
 use crate::{BOARD_HEIGHT, BOARD_WIDTH, FILE_NAMES, RANK_NAMES};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, EnumIter)]
-pub enum Orientation {
+pub enum Direction {
     North,
     West,
     South,
     East,
 }
 
-impl Orientation {
+impl Direction {
     #[must_use]
     pub fn turn_left(&self) -> Self {
         match self {
@@ -44,7 +44,7 @@ impl Orientation {
     }
 }
 
-impl std::fmt::Display for Orientation {
+impl std::fmt::Display for Direction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::North => write!(f, "N"),
