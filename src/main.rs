@@ -301,9 +301,11 @@ impl Game {
                 _ => Fpo::InvalidChar,
             };
 
+            let row_idx = usize::try_from(row_ptr).expect("Row pointer was negative");
+
             match obj {
                 Fpo::Square(content) => {
-                    board[row_ptr as usize][col_ptr as usize] = content;
+                    board[row_idx][col_ptr as usize] = content;
                     col_ptr += 1;
                 }
                 Fpo::JumpCol(cols) => {
@@ -337,7 +339,7 @@ impl Game {
         })
     }
 
-    pub fn to_fen(&self) -> String {
+    pub fn as_fen(&self) -> String {
         let mut fen_string = String::new();
 
         for row in self.board.iter().rev() {
@@ -532,7 +534,7 @@ fn main() {
     println!("{game:?}");
     println!("{game}");
     println!("{INITIAL_FEN_STRING}");
-    println!("{}", game.to_fen());
+    println!("{}", game.as_fen());
 
     for tile_move in game.valid_moves() {
         println!("{tile_move}");
