@@ -1,11 +1,10 @@
 use std::collections::HashSet;
 use std::io::{self, BufReader};
 
-use strum::IntoEnumIterator;
 
 use navigation::Coordinate;
 
-use crate::navigation::Orientation;
+use crate::navigation::Direction;
 use crate::tiles::TileType;
 use crate::ubi::ubi_loop;
 
@@ -29,26 +28,26 @@ enum BarragoonAlignment {
 enum BarragoonFace {
     Blocking,
     Straight { alignment: BarragoonAlignment },
-    OneWay { orientation: Orientation },
-    OneWayTurnLeft { orientation: Orientation },
-    OneWayTurnRight { orientation: Orientation },
+    OneWay { direction: Direction },
+    OneWayTurnLeft { direction: Direction },
+    OneWayTurnRight { direction: Direction },
     ForceTurn,
 }
 
 impl BarragoonFace {
-    pub fn can_be_captured_from(&self, enter_orientation: &Orientation) -> bool {
+    pub fn can_be_captured_from(&self, enter_dir: &Direction) -> bool {
         match self {
             Self::ForceTurn => true,
-            Self::Straight { alignment: Ba::Vertical } => *enter_orientation == Bo::North || *enter_orientation == Bo::South,
-            Self::Straight { alignment: Ba::Horizontal } => *enter_orientation == Bo::West || *enter_orientation == Bo::East,
+            Self::Straight { alignment: Ba::Vertical } => *enter_dir == Bd::North || *enter_dir == Bd::South,
+            Self::Straight { alignment: Ba::Horizontal } => *enter_dir == Bd::West || *enter_dir == Bd::East,
             Self::OneWay {
-                orientation: one_way_orientation,
-            } => one_way_orientation == enter_orientation,
+                direction: one_way_direction,
+            } => one_way_direction == enter_dir,
             Self::Blocking => true,
-            Self::OneWayTurnLeft { orientation: Bo::South } | Self::OneWayTurnRight { orientation: Bo::North } => *enter_orientation == Bo::West,
-            Self::OneWayTurnLeft { orientation: Bo::North } | Self::OneWayTurnRight { orientation: Bo::South } => *enter_orientation == Bo::East,
-            Self::OneWayTurnLeft { orientation: Bo::East } | Self::OneWayTurnRight { orientation: Bo::West } => *enter_orientation == Bo::South,
-            Self::OneWayTurnLeft { orientation: Bo::West } | Self::OneWayTurnRight { orientation: Bo::East } => *enter_orientation == Bo::North,
+            Self::OneWayTurnLeft { direction: Bd::South } | Self::OneWayTurnRight { direction: Bd::North } => *enter_dir == Bd::West,
+            Self::OneWayTurnLeft { direction: Bd::North } | Self::OneWayTurnRight { direction: Bd::South } => *enter_dir == Bd::East,
+            Self::OneWayTurnLeft { direction: Bd::East } | Self::OneWayTurnRight { direction: Bd::West } => *enter_dir == Bd::South,
+            Self::OneWayTurnLeft { direction: Bd::West } | Self::OneWayTurnRight { direction: Bd::East } => *enter_dir == Bd::North,
         }
     }
 
@@ -56,20 +55,20 @@ impl BarragoonFace {
         tile_type != TileType::Two || *self != Self::ForceTurn
     }
 
-    pub fn can_be_traversed(&self, enter: &Orientation, leave: &Orientation) -> bool {
-        let is_horizontal = *enter == Bo::East && *leave == Bo::West || *enter == Bo::West && *leave == Bo::East;
+    pub fn can_be_traversed(self, enter_dir: Direction, leave_dir: Direction) -> bool {
+        let is_horizontal = enter_dir == Bd::East && leave_dir == Bd::West || enter_dir == Bd::West && leave_dir == Bd::East;
 
-        let is_vertical = *enter == Bo::South && *leave == Bo::North || *enter == Bo::North && *leave == Bo::South;
+        let is_vertical = enter_dir == Bd::South && leave_dir == Bd::North || enter_dir == Bd::North && leave_dir == Bd::South;
 
-        let is_left_turn = *enter == Bo::North && *leave == Bo::West
-            || *enter == Bo::South && *leave == Bo::East
-            || *enter == Bo::East && *leave == Bo::North
-            || *enter == Bo::West && *leave == Bo::South;
+        let is_left_turn = enter_dir == Bd::North && leave_dir == Bd::West
+            || enter_dir == Bd::South && leave_dir == Bd::East
+            || enter_dir == Bd::East && leave_dir == Bd::North
+            || enter_dir == Bd::West && leave_dir == Bd::South;
 
-        let is_right_turn = *enter == Bo::North && *leave == Bo::East
-            || *enter == Bo::South && *leave == Bo::West
-            || *enter == Bo::East && *leave == Bo::South
-            || *enter == Bo::West && *leave == Bo::North;
+        let is_right_turn = enter_dir == Bd::North && leave_dir == Bd::East
+            || enter_dir == Bd::South && leave_dir == Bd::West
+            || enter_dir == Bd::East && leave_dir == Bd::South
+            || enter_dir == Bd::West && leave_dir == Bd::North;
 
         if u8::from(is_horizontal) + u8::from(is_vertical) + u8::from(is_left_turn) + u8::from(is_right_turn) != 1 {
             return false;
@@ -80,15 +79,15 @@ impl BarragoonFace {
             Self::Straight { alignment: Ba::Vertical } => is_vertical,
             Self::Straight { alignment: Ba::Horizontal } => is_horizontal,
             Self::OneWay {
-                orientation: one_way_orientation,
-            } => one_way_orientation == enter && (is_horizontal || is_vertical),
+                direction: one_way_direction,
+            } => one_way_direction == enter_dir && (is_horizontal || is_vertical),
             Self::Blocking => false,
             Self::OneWayTurnLeft {
-                orientation: barragoon_orientation,
-            } => is_left_turn && leave == barragoon_orientation,
+                direction: barragoon_direction,
+            } => is_left_turn && leave_dir == barragoon_direction,
             Self::OneWayTurnRight {
-                orientation: barragoon_orientation,
-            } => is_right_turn && leave == barragoon_orientation,
+                direction: barragoon_direction,
+            } => is_right_turn && leave_dir == barragoon_direction,
         }
     }
 }
@@ -137,19 +136,19 @@ impl SquareContent {
             Self::Barragoon(Bf::ForceTurn) => '+',
             Self::Barragoon(Bf::Straight { alignment: Ba::Vertical }) => '|',
             Self::Barragoon(Bf::Straight { alignment: Ba::Horizontal }) => '-',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::South }) => 'Y',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::North }) => '^',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::West }) => '<',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::East }) => '>',
+            Self::Barragoon(Bf::OneWay { direction: Bd::South }) => 'Y',
+            Self::Barragoon(Bf::OneWay { direction: Bd::North }) => '^',
+            Self::Barragoon(Bf::OneWay { direction: Bd::West }) => '<',
+            Self::Barragoon(Bf::OneWay { direction: Bd::East }) => '>',
             Self::Barragoon(Bf::Blocking) => 'x',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::South }) => 'S',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::North }) => 'N',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::East }) => 'E',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::West }) => 'W',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::South }) => 's',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::North }) => 'n',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::East }) => 'e',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::West }) => 'w',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bd::South }) => 'S',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bd::North }) => 'N',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bd::East }) => 'E',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bd::West }) => 'W',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bd::South }) => 's',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bd::North }) => 'n',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bd::East }) => 'e',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bd::West }) => 'w',
         }
     }
 }
@@ -184,7 +183,7 @@ enum FenParseObject {
 }
 type Fpo = FenParseObject;
 type Ba = BarragoonAlignment;
-type Bo = Orientation;
+type Bd = Direction;
 type Bf = BarragoonFace;
 
 struct SquareIterator<'a> {
@@ -280,19 +279,19 @@ impl Game {
                 '+' => Fpo::Square(SC::Barragoon(Bf::ForceTurn)),
                 '|' => Fpo::Square(SC::Barragoon(Bf::Straight { alignment: Ba::Vertical })),
                 '-' => Fpo::Square(SC::Barragoon(Bf::Straight { alignment: Ba::Horizontal })),
-                'Y' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::South })),
-                '^' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::North })),
-                '<' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::West })),
-                '>' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::East })),
+                'Y' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bd::South })),
+                '^' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bd::North })),
+                '<' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bd::West })),
+                '>' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bd::East })),
                 'x' => Fpo::Square(SC::Barragoon(Bf::Blocking)),
-                'S' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::South })),
-                'N' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::North })),
-                'E' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::East })),
-                'W' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::West })),
-                's' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::South })),
-                'n' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::North })),
-                'e' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::East })),
-                'w' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::West })),
+                'S' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bd::South })),
+                'N' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bd::North })),
+                'E' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bd::East })),
+                'W' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bd::West })),
+                's' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bd::South })),
+                'n' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bd::North })),
+                'e' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bd::East })),
+                'w' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bd::West })),
                 '1'..='7' => Fpo::JumpCol(
                     c.to_digit(10)
                         .map(|d| u8::try_from(d).expect("Cannot parse digit."))
@@ -445,7 +444,7 @@ impl Game {
                                     } else {
                                         break;
                                     }
-                                } else if !face.can_be_traversed(&full_step.enter_direction, &full_step.leave_direction.unwrap()) {
+                                } else if !face.can_be_traversed(full_step.enter_direction, full_step.leave_direction.unwrap()) {
                                     break;
                                 }
                             }
@@ -568,185 +567,185 @@ mod tests {
         let game = Game::new();
 
         // first rank
-        assert_eq!(game.get_content(&Coordinate::new(0, 0)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(0, 0)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(0, 1)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(0, 1)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
                 player: Player::White
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(0, 2)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(0, 2)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::White
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(0, 3)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(0, 3)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(0, 4)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(0, 4)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::White
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(0, 5)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(0, 5)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
                 player: Player::White
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(0, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(0, 6)), SquareContent::Empty);
 
         // second rank
-        assert_eq!(game.get_content(&Coordinate::new(1, 0)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(1, 1)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(1, 0)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(1, 1)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(1, 2)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(1, 2)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
                 player: Player::White
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(1, 3)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(1, 3)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::White
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(1, 4)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(1, 4)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
                 player: Player::White
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(1, 5)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(1, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(1, 5)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(1, 6)), SquareContent::Empty);
 
         // third rank
         for file in 0..7 {
-            assert_eq!(game.get_content(&Coordinate::new(2, file)), &SquareContent::Empty);
+            assert_eq!(*game.get_content(&Coordinate::new(2, file)), SquareContent::Empty);
         }
 
         // forth rank
-        assert_eq!(game.get_content(&Coordinate::new(3, 0)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(3, 0)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(3, 1)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(3, 1)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(3, 2)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(3, 3)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(3, 4)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(3, 2)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(3, 3)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(3, 4)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(3, 5)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(3, 5)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(3, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(3, 6)), SquareContent::Empty);
 
         // fifth rank
         assert_eq!(
-            game.get_content(&Coordinate::new(4, 0)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(4, 0)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(4, 1)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(4, 1)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(4, 2)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(4, 2)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(4, 3)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(4, 3)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(4, 4)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(4, 4)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(4, 5)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(4, 5)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(4, 6)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(4, 6)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
 
         // sixth rank
-        assert_eq!(game.get_content(&Coordinate::new(5, 0)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(5, 0)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(5, 1)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(5, 1)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(5, 2)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(5, 3)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(5, 4)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(5, 2)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(5, 3)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(5, 4)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(5, 5)),
-            &SquareContent::Barragoon(BarragoonFace::Blocking)
+            *game.get_content(&Coordinate::new(5, 5)),
+            SquareContent::Barragoon(BarragoonFace::Blocking)
         );
-        assert_eq!(game.get_content(&Coordinate::new(5, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(5, 6)), SquareContent::Empty);
 
         // seventh rank
         for file in 0..7 {
-            assert_eq!(game.get_content(&Coordinate::new(6, file)), &SquareContent::Empty);
+            assert_eq!(*game.get_content(&Coordinate::new(6, file)), SquareContent::Empty);
         }
 
         // eigth rank
-        assert_eq!(game.get_content(&Coordinate::new(7, 0)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(7, 1)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(7, 0)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(7, 1)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(7, 2)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(7, 2)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
                 player: Player::Brown
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(7, 3)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(7, 3)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::Brown
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(7, 4)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(7, 4)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
                 player: Player::Brown
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(7, 5)), &SquareContent::Empty);
-        assert_eq!(game.get_content(&Coordinate::new(7, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(7, 5)), SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(7, 6)), SquareContent::Empty);
 
         // ninth rank
-        assert_eq!(game.get_content(&Coordinate::new(8, 0)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(8, 0)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(8, 1)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(8, 1)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
                 player: Player::Brown
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(8, 2)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(8, 2)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::Brown
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(8, 3)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(8, 3)), SquareContent::Empty);
         assert_eq!(
-            game.get_content(&Coordinate::new(8, 4)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(8, 4)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
                 player: Player::Brown
             })
         );
         assert_eq!(
-            game.get_content(&Coordinate::new(8, 5)),
-            &SquareContent::Tile(Tile {
+            *game.get_content(&Coordinate::new(8, 5)),
+            SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
                 player: Player::Brown
             })
         );
-        assert_eq!(game.get_content(&Coordinate::new(8, 6)), &SquareContent::Empty);
+        assert_eq!(*game.get_content(&Coordinate::new(8, 6)), SquareContent::Empty);
     }
 
     #[test]

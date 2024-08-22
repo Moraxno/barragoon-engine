@@ -94,13 +94,9 @@ impl UbiHandler {
     fn collect_residual_fen_args(&self, residual_args: &mut SplitWhitespace) -> String {
         let mut fen_string = String::new();
 
-        let i: usize;
         for arg in residual_args {
-            if arg != "moves" {
-                fen_string.push_str(arg);
-            } else {
-                break;
-            }
+            if arg == "moves" { break; }
+            fen_string.push_str(arg);
         }
 
         fen_string
