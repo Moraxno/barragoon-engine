@@ -2,9 +2,11 @@ name: Rust
 
 on:
   push:
-    branches: [ "main", "rc/**/*" ]
+    branches: [ $default-branch, $protected-branches ]
   pull_request:
-    branches: [ "main", "rc/**/*" ]
+    branches: [ $default-branch, $protected-branches ]
+  schedule:
+    - cron: '45 3 * * 3'
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Build
+    - name: Lint
       run: cargo clippy --verbose
     
    
