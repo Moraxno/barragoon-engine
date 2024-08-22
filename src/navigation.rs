@@ -13,30 +13,33 @@ pub enum Orientation {
 }
 
 impl Orientation {
-    pub fn turn_left(&self) -> Orientation {
+    #[must_use]
+    pub fn turn_left(&self) -> Self {
         match self {
-            Orientation::North => Orientation::West,
-            Orientation::West => Orientation::South,
-            Orientation::South => Orientation::East,
-            Orientation::East => Orientation::North,
+            Self::North => Self::West,
+            Self::West => Self::South,
+            Self::South => Self::East,
+            Self::East => Self::North,
         }
     }
 
-    pub fn turn_right(&self) -> Orientation {
+    #[must_use]
+    pub fn turn_right(&self) -> Self {
         match self {
-            Orientation::North => Orientation::East,
-            Orientation::East => Orientation::South,
-            Orientation::South => Orientation::West,
-            Orientation::West => Orientation::North,
+            Self::North => Self::East,
+            Self::East => Self::South,
+            Self::South => Self::West,
+            Self::West => Self::North,
         }
     }
 
+    #[must_use]
     pub fn as_delta(&self) -> PositionDelta {
         match self {
-            Orientation::North => PositionDelta::new(1, 0),
-            Orientation::East => PositionDelta::new(0, 1),
-            Orientation::South => PositionDelta::new(-1, 0),
-            Orientation::West => PositionDelta::new(0, -1),
+            Self::North => PositionDelta::new(1, 0),
+            Self::East => PositionDelta::new(0, 1),
+            Self::South => PositionDelta::new(-1, 0),
+            Self::West => PositionDelta::new(0, -1),
         }
     }
 }
@@ -44,10 +47,10 @@ impl Orientation {
 impl std::fmt::Display for Orientation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Orientation::North => write!(f, "N"),
-            Orientation::South => write!(f, "S"),
-            Orientation::East => write!(f, "E"),
-            Orientation::West => write!(f, "W"),
+            Self::North => write!(f, "N"),
+            Self::South => write!(f, "S"),
+            Self::East => write!(f, "E"),
+            Self::West => write!(f, "W"),
         }
     }
 }
@@ -58,19 +61,21 @@ pub struct Coordinate {
     pub file: u8,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PositionDelta {
     pub rank_delta: i8,
     pub file_delta: i8,
 }
 
 impl PositionDelta {
-    pub fn new(rank_delta: i8, file_delta: i8) -> PositionDelta {
-        PositionDelta { file_delta, rank_delta }
+    #[must_use]
+    pub fn new(rank_delta: i8, file_delta: i8) -> Self {
+        Self { rank_delta, file_delta }
     }
 
-    pub fn zero() -> PositionDelta {
-        PositionDelta::new(0, 0)
+    #[must_use]
+    pub fn zero() -> Self {
+        Self::new(0, 0)
     }
 }
 
@@ -81,8 +86,9 @@ impl std::fmt::Display for PositionDelta {
 }
 
 impl Coordinate {
-    pub fn new(rank: u8, file: u8) -> Coordinate {
-        Coordinate { rank, file }
+    #[must_use]
+    pub fn new(rank: u8, file: u8) -> Self {
+        Self { rank, file }
     }
 }
 
@@ -106,7 +112,7 @@ impl ops::Add<PositionDelta> for Coordinate {
     type Output = Self;
 
     fn add(self, rhs: PositionDelta) -> Self::Output {
-        Coordinate::new((self.rank as i8 + rhs.rank_delta) as u8, (self.file as i8 + rhs.file_delta) as u8)
+        Self::new((self.rank as i8 + rhs.rank_delta) as u8, (self.file as i8 + rhs.file_delta) as u8)
     }
 }
 
@@ -114,31 +120,31 @@ impl ops::Sub<PositionDelta> for Coordinate {
     type Output = Self;
 
     fn sub(self, rhs: PositionDelta) -> Self::Output {
-        Coordinate::new((self.rank as i8 - rhs.rank_delta) as u8, (self.file as i8 - rhs.file_delta) as u8)
+        Self::new((self.rank as i8 - rhs.rank_delta) as u8, (self.file as i8 - rhs.file_delta) as u8)
     }
 }
 
-impl ops::Sub<Coordinate> for Coordinate {
+impl ops::Sub<Self> for Coordinate {
     type Output = PositionDelta;
 
-    fn sub(self, rhs: Coordinate) -> Self::Output {
+    fn sub(self, rhs: Self) -> Self::Output {
         PositionDelta::new(self.rank as i8 - rhs.rank as i8, self.file as i8 - rhs.file as i8)
     }
 }
 
-impl ops::Add<PositionDelta> for PositionDelta {
+impl ops::Add<Self> for PositionDelta {
     type Output = Self;
 
-    fn add(self, rhs: PositionDelta) -> Self::Output {
-        PositionDelta::new(self.rank_delta + rhs.rank_delta, self.file_delta + rhs.file_delta)
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.rank_delta + rhs.rank_delta, self.file_delta + rhs.file_delta)
     }
 }
 
-impl ops::Sub<PositionDelta> for PositionDelta {
+impl ops::Sub<Self> for PositionDelta {
     type Output = Self;
 
-    fn sub(self, rhs: PositionDelta) -> Self::Output {
-        PositionDelta::new(self.rank_delta - rhs.rank_delta, self.file_delta - rhs.file_delta)
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(self.rank_delta - rhs.rank_delta, self.file_delta - rhs.file_delta)
     }
 }
 
@@ -146,7 +152,7 @@ impl ops::Mul<i8> for PositionDelta {
     type Output = Self;
 
     fn mul(self, rhs: i8) -> Self::Output {
-        PositionDelta::new(self.rank_delta * rhs, self.file_delta * rhs)
+        Self::new(self.rank_delta * rhs, self.file_delta * rhs)
     }
 }
 

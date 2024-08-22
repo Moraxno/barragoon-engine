@@ -1,13 +1,12 @@
 use std::fmt::Write as FmtWrite;
-use std::sync::mpsc;
 use std::{
-    io::{self, BufRead, Cursor, Read, Write},
+    io::{self, BufRead, Read, Write},
     str::SplitWhitespace,
     sync::mpsc::{Receiver, Sender},
     time::Duration,
 };
 
-use crate::{FenError, Game};
+use crate::Game;
 
 use crate::application;
 
@@ -27,7 +26,7 @@ enum UbiState {
 
 impl UbiHandler {
     pub fn new() -> Self {
-        UbiHandler {
+        Self {
             state: UbiState::Unitialized,
             game: Game::empty(),
         }
@@ -50,7 +49,8 @@ impl UbiHandler {
                     application::VERSION_MINOR,
                     application::VERSION_PATCH,
                     application::AUTHOR_NAME
-                ).unwrap();
+                )
+                .unwrap();
                 answers.push(answer);
                 answers.push(String::from("ubiok"));
             }
@@ -97,7 +97,7 @@ impl UbiHandler {
         let i: usize;
         for arg in residual_args {
             if arg != "moves" {
-                fen_string.push_str(arg)
+                fen_string.push_str(arg);
             } else {
                 break;
             }
@@ -133,7 +133,7 @@ where
             };
 
             for response in answer {
-                writeln!(output, "{}", response).unwrap();
+                writeln!(output, "{response}").unwrap();
             }
         }
     }
@@ -148,14 +148,14 @@ struct SyncReader {
 }
 
 impl SyncReader {
-    pub fn new(recv: Receiver<u8>) -> SyncReader {
-        SyncReader { inner: recv }
+    pub fn new(recv: Receiver<u8>) -> Self {
+        Self { inner: recv }
     }
 }
 
 impl SyncWriter {
-    pub fn new(send: Sender<u8>) -> SyncWriter {
-        SyncWriter { inner: send }
+    pub fn new(send: Sender<u8>) -> Self {
+        Self { inner: send }
     }
 }
 
@@ -221,7 +221,7 @@ impl Read for SyncReader {
 #[cfg(test)]
 mod tests {
     use std::{
-        io::{BufRead, BufReader, BufWriter, Cursor, Write},
+        io::{BufRead, BufReader, Write},
         sync::mpsc,
         thread,
         time::Duration,
@@ -240,10 +240,10 @@ mod tests {
         let (input_tx, input_rx) = mpsc::channel();
         let (output_tx, output_rx) = mpsc::channel();
 
-        let mut input_send = SyncWriter::new(input_tx);
+        let input_send = SyncWriter::new(input_tx);
         let mut input_recv = BufReader::new(SyncReader::new(input_rx));
         let mut output_send = SyncWriter::new(output_tx);
-        let mut output_recv = BufReader::new(SyncReader::new(output_rx));
+        let output_recv = BufReader::new(SyncReader::new(output_rx));
 
         let ubi_thread = thread::spawn(move || ubi_loop(&mut input_recv, &mut output_send));
 
@@ -261,10 +261,10 @@ mod tests {
         // discard first line ...
         let mut buf = String::new();
         output_recv.read_line(&mut buf).unwrap();
-        print!("{}", buf);
+        print!("{buf}");
         buf.clear();
         output_recv.read_line(&mut buf).unwrap();
-        print!("{}", buf);
+        print!("{buf}");
         assert_eq!(buf, "ubiok\n");
 
         // let r = t.join().expect("Thread could not rejoin.").expect("tf");
