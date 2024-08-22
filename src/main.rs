@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 use std::io::{self, BufReader};
 
-use strum::IntoEnumIterator;
-
 use navigation::Coordinate;
 
-use crate::navigation::Orientation;
+use crate::navigation::Direction;
 use crate::tiles::TileType;
 use crate::ubi::ubi_loop;
 
@@ -29,47 +27,44 @@ enum BarragoonAlignment {
 enum BarragoonFace {
     Blocking,
     Straight { alignment: BarragoonAlignment },
-    OneWay { orientation: Orientation },
-    OneWayTurnLeft { orientation: Orientation },
-    OneWayTurnRight { orientation: Orientation },
+    OneWay { direction: Direction },
+    OneWayTurnLeft { direction: Direction },
+    OneWayTurnRight { direction: Direction },
     ForceTurn,
 }
 
 impl BarragoonFace {
-    pub fn can_be_captured_from(&self, enter_orientation: &Orientation) -> bool {
+    pub fn can_be_captured_from(&self, enter_dir: &Direction) -> bool {
         match self {
-            Self::ForceTurn => true,
-            Self::Straight { alignment: Ba::Vertical } => *enter_orientation == Bo::North || *enter_orientation == Bo::South,
-            Self::Straight { alignment: Ba::Horizontal } => *enter_orientation == Bo::West || *enter_orientation == Bo::East,
-            Self::OneWay {
-                orientation: one_way_orientation,
-            } => one_way_orientation == enter_orientation,
-            Self::Blocking => true,
-            Self::OneWayTurnLeft { orientation: Bo::South } | Self::OneWayTurnRight { orientation: Bo::North } => *enter_orientation == Bo::West,
-            Self::OneWayTurnLeft { orientation: Bo::North } | Self::OneWayTurnRight { orientation: Bo::South } => *enter_orientation == Bo::East,
-            Self::OneWayTurnLeft { orientation: Bo::East } | Self::OneWayTurnRight { orientation: Bo::West } => *enter_orientation == Bo::South,
-            Self::OneWayTurnLeft { orientation: Bo::West } | Self::OneWayTurnRight { orientation: Bo::East } => *enter_orientation == Bo::North,
+            Self::ForceTurn | Self::Blocking => true,
+            Self::Straight { alignment: Ba::Vertical } => *enter_dir == Bo::North || *enter_dir == Bo::South,
+            Self::Straight { alignment: Ba::Horizontal } => *enter_dir == Bo::West || *enter_dir == Bo::East,
+            Self::OneWay { direction: one_way_dir } => one_way_dir == enter_dir,
+            Self::OneWayTurnLeft { direction: Bo::South } | Self::OneWayTurnRight { direction: Bo::North } => *enter_dir == Bo::West,
+            Self::OneWayTurnLeft { direction: Bo::North } | Self::OneWayTurnRight { direction: Bo::South } => *enter_dir == Bo::East,
+            Self::OneWayTurnLeft { direction: Bo::East } | Self::OneWayTurnRight { direction: Bo::West } => *enter_dir == Bo::South,
+            Self::OneWayTurnLeft { direction: Bo::West } | Self::OneWayTurnRight { direction: Bo::East } => *enter_dir == Bo::North,
         }
     }
 
-    pub fn can_be_captured_by(&self, tile_type: TileType) -> bool {
-        tile_type != TileType::Two || *self != Self::ForceTurn
+    pub fn can_be_captured_by(self, tile_type: TileType) -> bool {
+        tile_type != TileType::Two || self != Self::ForceTurn
     }
 
-    pub fn can_be_traversed(&self, enter: &Orientation, leave: &Orientation) -> bool {
-        let is_horizontal = *enter == Bo::East && *leave == Bo::West || *enter == Bo::West && *leave == Bo::East;
+    pub fn can_be_traversed(self, enter_dir: Direction, leave_dir: Direction) -> bool {
+        let is_horizontal = enter_dir == Bo::East && leave_dir == Bo::West || enter_dir == Bo::West && leave_dir == Bo::East;
 
-        let is_vertical = *enter == Bo::South && *leave == Bo::North || *enter == Bo::North && *leave == Bo::South;
+        let is_vertical = enter_dir == Bo::South && leave_dir == Bo::North || enter_dir == Bo::North && leave_dir == Bo::South;
 
-        let is_left_turn = *enter == Bo::North && *leave == Bo::West
-            || *enter == Bo::South && *leave == Bo::East
-            || *enter == Bo::East && *leave == Bo::North
-            || *enter == Bo::West && *leave == Bo::South;
+        let is_left_turn = enter_dir == Bo::North && leave_dir == Bo::West
+            || enter_dir == Bo::South && leave_dir == Bo::East
+            || enter_dir == Bo::East && leave_dir == Bo::North
+            || enter_dir == Bo::West && leave_dir == Bo::South;
 
-        let is_right_turn = *enter == Bo::North && *leave == Bo::East
-            || *enter == Bo::South && *leave == Bo::West
-            || *enter == Bo::East && *leave == Bo::South
-            || *enter == Bo::West && *leave == Bo::North;
+        let is_right_turn = *enter_dir == Bo::North && *leave_dir == Bo::East
+            || *enter_dir == Bo::South && *leave_dir == Bo::West
+            || *enter_dir == Bo::East && *leave_dir == Bo::South
+            || *enter_dir == Bo::West && *leave_dir == Bo::North;
 
         if u8::from(is_horizontal) + u8::from(is_vertical) + u8::from(is_left_turn) + u8::from(is_right_turn) != 1 {
             return false;
@@ -79,16 +74,10 @@ impl BarragoonFace {
             Self::ForceTurn => is_left_turn || is_right_turn,
             Self::Straight { alignment: Ba::Vertical } => is_vertical,
             Self::Straight { alignment: Ba::Horizontal } => is_horizontal,
-            Self::OneWay {
-                orientation: one_way_orientation,
-            } => one_way_orientation == enter && (is_horizontal || is_vertical),
+            Self::OneWay { direction: one_way_dir } => one_way_dir == *enter_dir && (is_horizontal || is_vertical),
             Self::Blocking => false,
-            Self::OneWayTurnLeft {
-                orientation: barragoon_orientation,
-            } => is_left_turn && leave == barragoon_orientation,
-            Self::OneWayTurnRight {
-                orientation: barragoon_orientation,
-            } => is_right_turn && leave == barragoon_orientation,
+            Self::OneWayTurnLeft { direction: barragoon_dir } => is_left_turn && *leave_dir == barragoon_dir,
+            Self::OneWayTurnRight { direction: barragoon_dir } => is_right_turn && *leave_dir == barragoon_dir,
         }
     }
 }
@@ -113,7 +102,7 @@ struct Tile {
 }
 
 impl Tile {
-    pub fn to_fen_char(&self) -> char {
+    pub const fn to_fen_char(self) -> char {
         match self.player {
             Player::White => match self.tile_type {
                 TileType::Two => 'Z',
@@ -130,26 +119,26 @@ impl Tile {
 }
 
 impl SquareContent {
-    pub fn to_fen_char(&self) -> char {
+    pub const fn as_fen_char(&self) -> char {
         match self {
             Self::Empty => ' ',
             Self::Tile(tile) => tile.to_fen_char(),
             Self::Barragoon(Bf::ForceTurn) => '+',
             Self::Barragoon(Bf::Straight { alignment: Ba::Vertical }) => '|',
             Self::Barragoon(Bf::Straight { alignment: Ba::Horizontal }) => '-',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::South }) => 'Y',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::North }) => '^',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::West }) => '<',
-            Self::Barragoon(Bf::OneWay { orientation: Bo::East }) => '>',
+            Self::Barragoon(Bf::OneWay { direction: Bo::South }) => 'Y',
+            Self::Barragoon(Bf::OneWay { direction: Bo::North }) => '^',
+            Self::Barragoon(Bf::OneWay { direction: Bo::West }) => '<',
+            Self::Barragoon(Bf::OneWay { direction: Bo::East }) => '>',
             Self::Barragoon(Bf::Blocking) => 'x',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::South }) => 'S',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::North }) => 'N',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::East }) => 'E',
-            Self::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::West }) => 'W',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::South }) => 's',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::North }) => 'n',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::East }) => 'e',
-            Self::Barragoon(Bf::OneWayTurnRight { orientation: Bo::West }) => 'w',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bo::South }) => 'S',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bo::North }) => 'N',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bo::East }) => 'E',
+            Self::Barragoon(Bf::OneWayTurnLeft { direction: Bo::West }) => 'W',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bo::South }) => 's',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bo::North }) => 'n',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bo::East }) => 'e',
+            Self::Barragoon(Bf::OneWayTurnRight { direction: Bo::West }) => 'w',
         }
     }
 }
@@ -184,7 +173,7 @@ enum FenParseObject {
 }
 type Fpo = FenParseObject;
 type Ba = BarragoonAlignment;
-type Bo = Orientation;
+type Bo = Direction;
 type Bf = BarragoonFace;
 
 struct SquareIterator<'a> {
@@ -198,21 +187,20 @@ impl<'a> Iterator for SquareIterator<'a> {
     type Item = SquareView<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+
         if self.ifile >= BOARD_WIDTH {
             self.irank += 1;
             self.ifile = 0;
         }
 
-        let result: Option<Self::Item>;
-
-        if self.irank >= BOARD_HEIGHT {
-            result = None;
+        let result: Option<Self::Item> = if self.irank >= BOARD_HEIGHT {
+            None
         } else {
-            result = Some(SquareView {
+            Some(SquareView {
                 coordinate: Coordinate::new(self.irank, self.ifile),
                 content: &self.owner_game.board[self.irank as usize][self.ifile as usize],
-            });
-        }
+            })
+        };
 
         self.ifile += 1;
 
@@ -248,7 +236,7 @@ impl Game {
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let mut board: [[SC; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize] = [[SC::Empty; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize];
 
-        let mut row_ptr: i8 = BOARD_HEIGHT as i8 - 1;
+        let mut row_ptr: i8 = i8::try_from(BOARD_HEIGHT).expect("Board height larger than i8 limit.") - 1;
         let mut col_ptr: u8 = 0;
 
         for (index, c) in fen.char_indices() {
@@ -280,19 +268,19 @@ impl Game {
                 '+' => Fpo::Square(SC::Barragoon(Bf::ForceTurn)),
                 '|' => Fpo::Square(SC::Barragoon(Bf::Straight { alignment: Ba::Vertical })),
                 '-' => Fpo::Square(SC::Barragoon(Bf::Straight { alignment: Ba::Horizontal })),
-                'Y' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::South })),
-                '^' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::North })),
-                '<' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::West })),
-                '>' => Fpo::Square(SC::Barragoon(Bf::OneWay { orientation: Bo::East })),
+                'Y' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bo::South })),
+                '^' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bo::North })),
+                '<' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bo::West })),
+                '>' => Fpo::Square(SC::Barragoon(Bf::OneWay { direction: Bo::East })),
                 'x' => Fpo::Square(SC::Barragoon(Bf::Blocking)),
-                'S' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::South })),
-                'N' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::North })),
-                'E' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::East })),
-                'W' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { orientation: Bo::West })),
-                's' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::South })),
-                'n' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::North })),
-                'e' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::East })),
-                'w' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { orientation: Bo::West })),
+                'S' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bo::South })),
+                'N' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bo::North })),
+                'E' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bo::East })),
+                'W' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnLeft { direction: Bo::West })),
+                's' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bo::South })),
+                'n' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bo::North })),
+                'e' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bo::East })),
+                'w' => Fpo::Square(SC::Barragoon(Bf::OneWayTurnRight { direction: Bo::West })),
                 '1'..='7' => Fpo::JumpCol(
                     c.to_digit(10)
                         .map(|d| u8::try_from(d).expect("Cannot parse digit."))
@@ -302,9 +290,11 @@ impl Game {
                 _ => Fpo::InvalidChar,
             };
 
+            let row_idx = u8::try_from(row_ptr).expect("Negative row pointer");
+
             match obj {
                 Fpo::Square(content) => {
-                    board[row_ptr as usize][col_ptr as usize] = content;
+                    board[row_idx as usize][col_ptr as usize] = content;
                     col_ptr += 1;
                 }
                 Fpo::JumpCol(cols) => {
@@ -338,7 +328,7 @@ impl Game {
         })
     }
 
-    pub fn to_fen(&self) -> String {
+    pub fn as_fen(&self) -> String {
         let mut fen_string = String::new();
 
         for row in self.board.iter().rev() {
@@ -351,7 +341,7 @@ impl Game {
                         fen_string.push_str(&empty_count.to_string());
                         empty_count = 0;
                     }
-                    fen_string.push(square.to_fen_char());
+                    fen_string.push(square.as_fen_char());
                 }
             }
             if empty_count > 0 {
@@ -408,7 +398,7 @@ impl Game {
                         match target_square_content {
                             SC::Tile(attacked_tile) => {
                                 let Tile {
-                                    tile_type: attacked_tile_type,
+                                    tile_type: _,
                                     player: colliding_piece_player,
                                 } = attacked_tile;
                                 if (moving_piece_player == colliding_piece_player) || !is_last_step || !stride.can_capture() {
@@ -445,7 +435,10 @@ impl Game {
                                     } else {
                                         break;
                                     }
-                                } else if !face.can_be_traversed(&full_step.enter_direction, &full_step.leave_direction.unwrap()) {
+                                } else if !face.can_be_traversed(
+                                    &full_step.enter_direction,
+                                    &full_step.leave_direction.expect("Missing leave direction."),
+                                ) {
                                     break;
                                 }
                             }
@@ -471,7 +464,7 @@ impl std::fmt::Display for Game {
             f.write_fmt(format_args!("{} ", RANK_NAMES[irank]))?;
             for square in rank {
                 write!(f, "| ")?;
-                f.write_fmt(format_args!("{}", square.to_fen_char()))?;
+                f.write_fmt(format_args!("{}", square.as_fen_char()))?;
                 write!(f, " ")?;
             }
             write!(f, "|\n  ")?;
@@ -533,7 +526,7 @@ fn main() {
     println!("{game:?}");
     println!("{game}");
     println!("{INITIAL_FEN_STRING}");
-    println!("{}", game.to_fen());
+    println!("{}", game.as_fen());
 
     for tile_move in game.valid_moves() {
         println!("{tile_move}");

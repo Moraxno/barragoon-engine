@@ -1,7 +1,7 @@
 use std::fmt::Write;
 use std::hash::Hash;
 
-use crate::navigation::{Orientation, PositionDelta};
+use crate::navigation::{Direction, PositionDelta};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -41,7 +41,7 @@ impl TileType {
 
         let mut all_strides = vec![];
 
-        for start_direction in Orientation::iter() {
+        for start_direction in Direction::iter() {
             for bend_point in 0..stride_length {
                 if bend_point != 0 {
                     all_strides.push(Stride::new_bend(
@@ -87,9 +87,9 @@ impl TileType {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Stride {
-    start_direction: Orientation,
+    start_direction: Direction,
     start_length: u8,
-    bend_direction: Orientation,
+    bend_direction: Direction,
     bend_length: u8,
     is_full_stride: bool,
 }
@@ -104,7 +104,7 @@ impl Stride {
 pub struct StrideIterator<'a> {
     ref_stride: &'a Stride,
     index: u8,
-    last_direction: Orientation,
+    last_direction: Direction,
     position_delta: PositionDelta,
 }
 
@@ -121,8 +121,8 @@ impl<'a> StrideIterator<'a> {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Step {
-    pub enter_direction: Orientation,
-    pub leave_direction: Option<Orientation>,
+    pub enter_direction: Direction,
+    pub leave_direction: Option<Direction>,
     pub position_delta: PositionDelta,
 }
 
@@ -146,7 +146,7 @@ impl<'a> Iterator for StrideIterator<'a> {
             return None;
         }
 
-        let leave_direction: Option<Orientation>;
+        let leave_direction: Option<Direction>;
 
         if self.index < self.ref_stride.start_length - 1 {
             leave_direction = Some(self.ref_stride.start_direction);
@@ -177,9 +177,9 @@ impl<'a> Iterator for StrideIterator<'a> {
 impl Stride {
     #[must_use]
     pub fn new_bend(
-        start_direction: Orientation,
+        start_direction: Direction,
         start_length: u8,
-        bend_direction: Orientation,
+        bend_direction: Direction,
         bend_length: u8,
         is_full_stride: bool,
     ) -> Self {
@@ -193,7 +193,7 @@ impl Stride {
     }
 
     #[must_use]
-    pub fn new_straight(start_direction: Orientation, start_length: u8, is_full_stride: bool) -> Self {
+    pub fn new_straight(start_direction: Direction, start_length: u8, is_full_stride: bool) -> Self {
         Self {
             start_direction,
             start_length,
@@ -290,19 +290,19 @@ mod tests {
     #[test]
     fn straight_stride_deltas_are_consistent() {
         assert_eq!(
-            Stride::new_straight(Orientation::East, 7, true).full_delta(),
+            Stride::new_straight(Direction::East, 7, true).full_delta(),
             PositionDelta::new(0, 7)
         );
         assert_eq!(
-            Stride::new_straight(Orientation::West, 3, false).full_delta(),
+            Stride::new_straight(Direction::West, 3, false).full_delta(),
             PositionDelta::new(0, -3)
         );
         assert_eq!(
-            Stride::new_straight(Orientation::North, 4, true).full_delta(),
+            Stride::new_straight(Direction::North, 4, true).full_delta(),
             PositionDelta::new(4, 0)
         );
         assert_eq!(
-            Stride::new_straight(Orientation::South, 5, false).full_delta(),
+            Stride::new_straight(Direction::South, 5, false).full_delta(),
             PositionDelta::new(-5, 0)
         );
     }
@@ -310,19 +310,19 @@ mod tests {
     #[test]
     fn bend_stride_deltas_are_consistent() {
         assert_eq!(
-            Stride::new_bend(Orientation::East, 7, Orientation::North, 2, true).full_delta(),
+            Stride::new_bend(Direction::East, 7, Direction::North, 2, true).full_delta(),
             PositionDelta::new(2, 7)
         );
         assert_eq!(
-            Stride::new_bend(Orientation::West, 3, Orientation::South, 4, false).full_delta(),
+            Stride::new_bend(Direction::West, 3, Direction::South, 4, false).full_delta(),
             PositionDelta::new(-4, -3)
         );
         assert_eq!(
-            Stride::new_bend(Orientation::North, 4, Orientation::East, 6, true).full_delta(),
+            Stride::new_bend(Direction::North, 4, Direction::East, 6, true).full_delta(),
             PositionDelta::new(4, 6)
         );
         assert_eq!(
-            Stride::new_bend(Orientation::South, 5, Orientation::West, 8, false).full_delta(),
+            Stride::new_bend(Direction::South, 5, Direction::West, 8, false).full_delta(),
             PositionDelta::new(-5, -8)
         );
     }
