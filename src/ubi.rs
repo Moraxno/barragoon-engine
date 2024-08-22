@@ -1,11 +1,15 @@
+use std::fmt::Write as FmtWrite;
+use std::sync::mpsc;
 use std::{
     io::{self, BufRead, Cursor, Read, Write},
-    str::SplitWhitespace, sync::mpsc::{Receiver, Sender}, time::Duration,
+    str::SplitWhitespace,
+    sync::mpsc::{Receiver, Sender},
+    time::Duration,
 };
-use std::sync::mpsc;
-
 
 use crate::{FenError, Game};
+
+use crate::application;
 
 struct UbiHandler {
     state: UbiState,
@@ -29,24 +33,34 @@ impl UbiHandler {
         }
     }
 
-    pub fn ubi(&mut self) -> Vec<&str> {
+    pub fn ubi(&mut self) -> Vec<String> {
         let mut answers = vec![];
 
         match self.state {
             UbiState::Unitialized => {
                 self.state = UbiState::WaitingForReady;
 
-                let answer = String::new();
+                let mut answer = String::new();
 
-                write!(answer, "id name {} author {}", "Barragoon-Engine v0.1", "Moraxno")
-
-                Some("id name Barragoon-Engine v0.1 author Moraxno\nubiok")
+                write!(
+                    answer,
+                    "id name {} v{}.{}.{} author {}",
+                    application::ENGINE_NAME,
+                    application::VERSION_MAJOR,
+                    application::VERSION_MINOR,
+                    application::VERSION_PATCH,
+                    application::AUTHOR_NAME
+                ).unwrap();
+                answers.push(answer);
+                answers.push(String::from("ubiok"));
             }
-            _ => None,
-        }
+            _ => (),
+        };
+
+        answers
     }
 
-    pub fn isready(&mut self) -> Vec<&str> {
+    pub fn isready(&mut self) -> Vec<String> {
         let mut answers = vec![];
         match self.state {
             UbiState::Unitialized => (),
@@ -54,15 +68,15 @@ impl UbiHandler {
             /* initialize self ... */ /* after that ... */
             {
                 self.state = UbiState::Ready;
-                answers.push("readyok");
-            },
-            _ => answers.push("readyok"),
+                answers.push(String::from("readyok"));
+            }
+            _ => answers.push(String::from("readyok")),
         };
 
         answers
     }
 
-    pub fn position(&mut self, mut args: SplitWhitespace) -> Vec<&str> {
+    pub fn position(&mut self, mut args: SplitWhitespace) -> Vec<String> {
         let start_position_mode = args.next();
 
         match start_position_mode {
@@ -98,11 +112,7 @@ where
     S: Read + BufRead,
     T: Write,
 {
-    writeln!(output, "Barragoon Engine v0.1")?;
-    writeln!(output, "Now listening for UBI commands ...")?;
-
     let mut handler = UbiHandler::new();
-
     let mut input_buffer = String::new();
 
     loop {
@@ -119,22 +129,22 @@ where
                 "isready" => handler.isready(),
                 "position" => handler.position(args),
                 "exit" => std::process::exit(0),
-                _ => Some("Unknown command"), ///// \"{}\"", cmd),
+                _ => vec![String::from("Unknown command")],
             };
-            
-            if let Some(buffer) = answer {
-                output.write(buffer.as_bytes()).unwrap();
+
+            for response in answer {
+                writeln!(output, "{}", response).unwrap();
             }
         }
     }
 }
 
 struct SyncWriter {
-    inner: Sender<u8>
+    inner: Sender<u8>,
 }
 
 struct SyncReader {
-    inner: Receiver<u8>
+    inner: Receiver<u8>,
 }
 
 impl SyncReader {
@@ -145,7 +155,7 @@ impl SyncReader {
 
 impl SyncWriter {
     pub fn new(send: Sender<u8>) -> SyncWriter {
-        SyncWriter { inner: send}
+        SyncWriter { inner: send }
     }
 }
 
@@ -167,13 +177,13 @@ impl Read for SyncReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut num_bytes = 0;
         loop {
-            let r = self.inner.recv_timeout(Duration::from_millis(20));    
-        
+            let r = self.inner.recv_timeout(Duration::from_millis(20));
+
             match r {
                 Ok(data) => {
                     buf[num_bytes] = data;
                     num_bytes += 1;
-                },
+                }
                 Err(..) => break,
             }
         }
@@ -187,8 +197,8 @@ impl Read for SyncReader {
 // // //         let mut send_byte = true;
 
 // // //         if self.buffer_is_clear {
-// // //             let r = self.inner.recv_timeout(Duration::from_millis(20));    
-        
+// // //             let r = self.inner.recv_timeout(Duration::from_millis(20));
+
 // // //             match r {
 // // //                 Ok(data) => self.my_buf[0] = data,
 // // //                 Err(..) => send_byte = false,
@@ -201,43 +211,48 @@ impl Read for SyncReader {
 // // //             Result::Ok(&self.my_buf[0..0])
 // // //         }
 
-        
 // // //     }
 
 // // //     fn consume(&mut self, amt: usize) {
-// // //         /* ignore */ 
+// // //         /* ignore */
 // // //     }
 // // // }
 
 #[cfg(test)]
 mod tests {
-    use std::{io::{BufRead, BufReader, BufWriter, Cursor, Write}, sync::mpsc, thread, time::Duration};
+    use std::{
+        io::{BufRead, BufReader, BufWriter, Cursor, Write},
+        sync::mpsc,
+        thread,
+        time::Duration,
+    };
 
     use crate::ubi::{SyncReader, SyncWriter};
 
     use super::ubi_loop;
+    use std::fmt::Write as FmtWrite;
 
-    fn connect_to_ubi_loop() -> (SyncWriter, BufReader<SyncReader>, std::thread::JoinHandle<Result<(), std::io::Error>>) {
+    fn connect_to_ubi_loop() -> (
+        SyncWriter,
+        BufReader<SyncReader>,
+        std::thread::JoinHandle<Result<(), std::io::Error>>,
+    ) {
         let (input_tx, input_rx) = mpsc::channel();
         let (output_tx, output_rx) = mpsc::channel();
-        
 
         let mut input_send = SyncWriter::new(input_tx);
         let mut input_recv = BufReader::new(SyncReader::new(input_rx));
         let mut output_send = SyncWriter::new(output_tx);
         let mut output_recv = BufReader::new(SyncReader::new(output_rx));
 
-        let ubi_thread = thread::spawn(move | | {
-            ubi_loop(&mut input_recv, &mut output_send)
-        });
+        let ubi_thread = thread::spawn(move || ubi_loop(&mut input_recv, &mut output_send));
 
         (input_send, output_recv, ubi_thread)
     }
 
     #[test]
     pub fn detect_ubi() {
-
-        connect_to_ubi_loop();
+        let (mut input_send, mut output_recv, _) = connect_to_ubi_loop();
 
         thread::sleep(Duration::from_millis(100));
         writeln!(input_send, "ubi").unwrap();
@@ -246,15 +261,14 @@ mod tests {
         // discard first line ...
         let mut buf = String::new();
         output_recv.read_line(&mut buf).unwrap();
+        print!("{}", buf);
         buf.clear();
         output_recv.read_line(&mut buf).unwrap();
-        assert_eq!(buf, "ubiok");
-
+        print!("{}", buf);
+        assert_eq!(buf, "ubiok\n");
 
         // let r = t.join().expect("Thread could not rejoin.").expect("tf");
 
         // println!("{:?}", output);
-
-
     }
 }

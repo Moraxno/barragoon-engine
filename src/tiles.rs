@@ -253,7 +253,7 @@ mod tests {
         for tile_type in TileType::iter() {
             for stride in tile_type.full_strides() {
                 let steps: Vec<Step> = stride.steps().collect();
-                assert_eq!(steps.len(), tile_type.full_stride_length().into())
+                assert_eq!(steps.len(), tile_type.full_stride_length() as usize)
             }
         }
     }

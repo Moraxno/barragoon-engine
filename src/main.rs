@@ -11,6 +11,7 @@ use crate::navigation::Orientation;
 use crate::tiles::TileType;
 use crate::ubi::ubi_loop;
 
+pub mod application;
 pub mod navigation;
 pub mod tiles;
 pub mod ubi;
