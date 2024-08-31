@@ -154,7 +154,11 @@ impl SquareContent {
 }
 
 const BOARD_WIDTH: u8 = 7;
+#[allow(clippy::cast_possible_wrap)]
+const BOARD_WIDTH_SIGNED: i8 = BOARD_WIDTH as i8;
 const BOARD_HEIGHT: u8 = 9;
+#[allow(clippy::cast_possible_wrap)]
+const BOARD_HEIGHT_SIGNED: i8 = BOARD_HEIGHT as i8;
 const INITIAL_FEN_STRING: &str = "1vd1dv1/2zdz2/7/1x3x1/x1x1x1x/1x3x1/7/2ZDZ2/1VD1DV1";
 const EMPTY_FEN_STRING: &str = "7/7/7/7/7/7/7/7/7";
 
@@ -247,7 +251,7 @@ impl Game {
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let mut board: [[SC; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize] = [[SC::Empty; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize];
 
-        let mut row_ptr: i8 = BOARD_HEIGHT as i8 - 1;
+        let mut row_ptr: i8 = BOARD_HEIGHT_SIGNED - 1;
         let mut col_ptr: u8 = 0;
 
         for (index, c) in fen.char_indices() {
@@ -404,6 +408,7 @@ impl Game {
                         }
 
                         let target_square_content = self.get_content(&new_coordinate);
+                        
                         let is_last_step = full_step.leave_direction.is_none();
 
                         match target_square_content {
@@ -433,8 +438,11 @@ impl Game {
                                 }
                             }
                             SC::Barragoon(face) => {
-                                if is_last_step {
-                                    if stride.can_capture()
+                                if let Some(leave_direction) = full_step.leave_direction {
+                                    if !face.can_be_traversed(full_step.enter_direction, leave_direction) {
+                                        break;
+                                    }
+                                } else if stride.can_capture()
                                         && face.can_be_captured_by(*moving_tile_type)
                                         && face.can_be_captured_from(&full_step.enter_direction)
                                     {
@@ -446,9 +454,7 @@ impl Game {
                                     } else {
                                         break;
                                     }
-                                } else if !face.can_be_traversed(full_step.enter_direction, full_step.leave_direction.unwrap()) {
-                                    break;
-                                }
+                                
                             }
                         }
                     }
