@@ -761,4 +761,75 @@ mod tests {
 
         assert_eq!(moves.len(), unique_moves.len());
     }
+
+    macro_rules! piece_has_n_moves {
+        ($($name:ident: $type:expr, $move_num:expr ), *) => {
+        $(
+            #[test]
+            fn $name() {
+                let mut game = Game::empty();
+                game.board[4][3] = SC::Tile(Tile {
+                    tile_type: $type,
+                    player: Player::White,
+                });
+                let moves = game.valid_moves();
+
+                for move_ in &moves {
+                    println!("{}", move_);
+                }
+                assert_eq!(moves.len(), $move_num);
+            }
+        )*
+        }
+    }
+
+    piece_has_n_moves! {
+        two_has_twelve_moves: TileType::Two, 12,
+        three_has_twenty_moves: TileType::Three, 20,
+        four_has_twenty_six_moves: TileType::Four, 26
+    }
+
+    #[test]
+    fn two_piece_cannot_capture_force_turn() {
+        let mut game = Game::empty();
+        game.board[4][3] = SC::Tile(Tile {
+            tile_type: TileType::Two,
+            player: Player::White,
+        });
+        game.board[4][1] = SC::Barragoon(BarragoonFace::ForceTurn);
+
+        let moves = game.valid_moves();
+
+        for move_ in &moves {
+            if let Move::BarragoonCapture { start: _, stop: _ } = move_ {
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    fn three_piece_can_capture_force_turn() {
+        let mut game = Game::empty();
+
+        game.board[4][3] = SC::Tile(Tile {
+            tile_type: TileType::Three,
+            player: Player::White,
+        });
+
+        for [file_idx, rank_idx] in [[4, 0], [3, 1], [2, 2], [1, 3]] {
+            game.board[file_idx][rank_idx] = SC::Barragoon(BarragoonFace::ForceTurn);
+
+            let moves = game.valid_moves();
+
+            let mut found_capture = false;
+
+            for move_ in &moves {
+                if let Move::BarragoonCapture { start: _, stop: _ } = move_ {
+                    found_capture = true;
+                }
+            }
+
+            assert!(found_capture);
+        }
+    }
 }
