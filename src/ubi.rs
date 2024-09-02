@@ -116,10 +116,10 @@ impl UbiHandler {
 }
 
 /// Starts the main handler for reacting to the UBI console interface.
-/// 
+///
 /// # Errors
 /// Produces an `io::Error`, if reading from the stdin pipe fails.
-/// 
+///
 pub fn run_loop<S, T>(input: &mut S, output: &mut T) -> io::Result<()>
 where
     S: Read + BufRead,
