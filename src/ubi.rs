@@ -6,9 +6,9 @@ use std::{
     time::Duration,
 };
 
-use crate::Game;
 use crate::application;
 use crate::FenError;
+use crate::Game;
 
 struct UbiHandler {
     state: UbiState,
@@ -75,7 +75,7 @@ impl UbiHandler {
 
     pub fn position(&mut self, mut args: SplitWhitespace) -> Vec<String> {
         let mut answers = vec![];
-        
+
         let start_position_mode = args.next();
 
         if start_position_mode == Some("startpos") {
@@ -84,10 +84,10 @@ impl UbiHandler {
             let game_result = Game::from_fen(Self::collect_residual_fen_args(&mut args).as_str());
             match game_result {
                 Ok(game) => self.game = game,
-                Err(FenError::UnderfullLine { char_index: ci } ) => answers.push(format!("Board rank is not filled at index {ci}.")),
-                Err(FenError::OverfullLine { char_index: ci } ) => answers.push(format!("Board rank is too full at index {ci}.")),
-                Err(FenError::TooManyLines { char_index: ci } ) => answers.push(format!("Board has to many ranks at index {ci}.")),
-                Err(FenError::InvalidChar { char_index: ci } ) => answers.push(format!("Board contains invalid char at index {ci}.")),
+                Err(FenError::UnderfullLine { char_index: ci }) => answers.push(format!("Board rank is not filled at index {ci}.")),
+                Err(FenError::OverfullLine { char_index: ci }) => answers.push(format!("Board rank is too full at index {ci}.")),
+                Err(FenError::TooManyLines { char_index: ci }) => answers.push(format!("Board has to many ranks at index {ci}.")),
+                Err(FenError::InvalidChar { char_index: ci }) => answers.push(format!("Board contains invalid char at index {ci}.")),
             }
         } else if let Some(subcommand) = start_position_mode {
             answers.push(format!("Invalid subcommand {subcommand}."));
@@ -115,6 +115,11 @@ impl UbiHandler {
     }
 }
 
+/// Starts the main handler for reacting to the UBI console interface.
+/// 
+/// # Errors
+/// Produces an `io::Error`, if reading from the stdin pipe fails.
+/// 
 pub fn run_loop<S, T>(input: &mut S, output: &mut T) -> io::Result<()>
 where
     S: Read + BufRead,

@@ -557,7 +557,7 @@ mod tests {
 
         for row in game.board {
             for cell in row {
-                assert_eq!(cell, SquareContent::Empty)
+                assert_eq!(cell, SquareContent::Empty);
             }
         }
     }
