@@ -32,8 +32,7 @@ impl TileType {
     }
 
     fn make_strides(&self, are_full_strides: bool) -> Vec<Stride> {
-        let stride_length =
-        if are_full_strides {
+        let stride_length = if are_full_strides {
             self.full_stride_length()
         } else {
             self.short_stride_length()
@@ -109,7 +108,7 @@ pub struct StrideIterator<'a> {
 }
 
 impl<'a> StrideIterator<'a> {
-    fn new(stride: &'a Stride) -> Self {
+    const fn new(stride: &'a Stride) -> Self {
         StrideIterator {
             ref_stride: stride,
             index: 0,
@@ -192,6 +191,7 @@ impl Stride {
         }
     }
 
+    #[must_use]
     pub const fn new_straight(start_direction: Direction, start_length: u8, is_full_stride: bool) -> Self {
         Self {
             start_direction,
@@ -202,16 +202,13 @@ impl Stride {
         }
     }
 
-    pub fn steps(&self) -> StrideIterator {
+    #[must_use]
+    pub const fn steps(&self) -> StrideIterator {
         StrideIterator::new(self)
     }
 
-    pub fn to_string(&self) -> String {
-        let mut s = String::new();
-        write!(s, "{self}").unwrap();
-        s
-    }
-
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
     pub fn full_delta(&self) -> PositionDelta {
         self.start_direction.as_delta() * self.start_length as i8 + self.bend_direction.as_delta() * self.bend_length as i8
     }

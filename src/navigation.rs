@@ -34,7 +34,7 @@ impl Direction {
     }
 
     #[must_use]
-    pub fn as_delta(&self) -> PositionDelta {
+    pub const fn as_delta(&self) -> PositionDelta {
         match self {
             Self::North => PositionDelta::new(1, 0),
             Self::East => PositionDelta::new(0, 1),
@@ -74,7 +74,7 @@ impl PositionDelta {
     }
 
     #[must_use]
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self::new(0, 0)
     }
 }
@@ -111,6 +111,8 @@ impl std::fmt::Display for Coordinate {
 impl ops::Add<PositionDelta> for Coordinate {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_sign_loss)]
     fn add(self, rhs: PositionDelta) -> Self::Output {
         Self::new((self.rank as i8 + rhs.rank_delta) as u8, (self.file as i8 + rhs.file_delta) as u8)
     }
@@ -119,6 +121,8 @@ impl ops::Add<PositionDelta> for Coordinate {
 impl ops::Sub<PositionDelta> for Coordinate {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_sign_loss)]
     fn sub(self, rhs: PositionDelta) -> Self::Output {
         Self::new((self.rank as i8 - rhs.rank_delta) as u8, (self.file as i8 - rhs.file_delta) as u8)
     }
@@ -127,6 +131,7 @@ impl ops::Sub<PositionDelta> for Coordinate {
 impl ops::Sub<Self> for Coordinate {
     type Output = PositionDelta;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn sub(self, rhs: Self) -> Self::Output {
         PositionDelta::new(self.rank as i8 - rhs.rank as i8, self.file as i8 - rhs.file as i8)
     }
@@ -135,6 +140,7 @@ impl ops::Sub<Self> for Coordinate {
 impl ops::Add<Self> for PositionDelta {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn add(self, rhs: Self) -> Self::Output {
         Self::new(self.rank_delta + rhs.rank_delta, self.file_delta + rhs.file_delta)
     }
@@ -143,6 +149,7 @@ impl ops::Add<Self> for PositionDelta {
 impl ops::Sub<Self> for PositionDelta {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn sub(self, rhs: Self) -> Self::Output {
         Self::new(self.rank_delta - rhs.rank_delta, self.file_delta - rhs.file_delta)
     }
@@ -151,6 +158,7 @@ impl ops::Sub<Self> for PositionDelta {
 impl ops::Mul<i8> for PositionDelta {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn mul(self, rhs: i8) -> Self::Output {
         Self::new(self.rank_delta * rhs, self.file_delta * rhs)
     }

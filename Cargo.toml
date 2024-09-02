@@ -16,7 +16,7 @@ cargo-llvm-cov = "0.6.11"
 unsafe_code = "forbid"
 
 [lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
 enum_glob_use = "deny"
-pedantic = "deny"
-nursery = "deny"
 unwrap_used = "deny"
