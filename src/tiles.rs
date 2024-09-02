@@ -14,7 +14,7 @@ pub enum TileType {
 
 impl TileType {
     #[must_use]
-    pub fn full_stride_length(&self) -> u8 {
+    pub const fn full_stride_length(&self) -> u8 {
         match self {
             Self::Two => 2,
             Self::Three => 3,
@@ -23,7 +23,7 @@ impl TileType {
     }
 
     #[must_use]
-    pub fn short_stride_length(&self) -> u8 {
+    pub const fn short_stride_length(&self) -> u8 {
         match self {
             Self::Two => 1,
             Self::Three => 2,
@@ -32,12 +32,12 @@ impl TileType {
     }
 
     fn make_strides(&self, are_full_strides: bool) -> Vec<Stride> {
-        let stride_length: u8;
+        let stride_length =
         if are_full_strides {
-            stride_length = self.full_stride_length();
+            self.full_stride_length()
         } else {
-            stride_length = self.short_stride_length();
-        }
+            self.short_stride_length()
+        };
 
         let mut all_strides = vec![];
 
@@ -96,7 +96,7 @@ pub struct Stride {
 
 impl Stride {
     #[must_use]
-    pub fn can_capture(&self) -> bool {
+    pub const fn can_capture(&self) -> bool {
         self.is_full_stride
     }
 }
@@ -176,7 +176,7 @@ impl<'a> Iterator for StrideIterator<'a> {
 
 impl Stride {
     #[must_use]
-    pub fn new_bend(
+    pub const fn new_bend(
         start_direction: Direction,
         start_length: u8,
         bend_direction: Direction,
@@ -192,8 +192,7 @@ impl Stride {
         }
     }
 
-    #[must_use]
-    pub fn new_straight(start_direction: Direction, start_length: u8, is_full_stride: bool) -> Self {
+    pub const fn new_straight(start_direction: Direction, start_length: u8, is_full_stride: bool) -> Self {
         Self {
             start_direction,
             start_length,
@@ -203,19 +202,16 @@ impl Stride {
         }
     }
 
-    #[must_use]
     pub fn steps(&self) -> StrideIterator {
         StrideIterator::new(self)
     }
 
-    #[must_use]
     pub fn to_string(&self) -> String {
         let mut s = String::new();
         write!(s, "{self}").unwrap();
         s
     }
 
-    #[must_use]
     pub fn full_delta(&self) -> PositionDelta {
         self.start_direction.as_delta() * self.start_length as i8 + self.bend_direction.as_delta() * self.bend_length as i8
     }
