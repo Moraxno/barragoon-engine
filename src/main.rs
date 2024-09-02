@@ -1,12 +1,12 @@
+#![allow(clippy::trivially_copy_pass_by_ref)]
 use std::collections::HashSet;
 use std::io::{self, BufReader};
-
 
 use navigation::Coordinate;
 
 use crate::navigation::Direction;
 use crate::tiles::TileType;
-use crate::ubi::ubi_loop;
+use crate::ubi::run_loop;
 
 pub mod application;
 pub mod navigation;
@@ -37,13 +37,10 @@ enum BarragoonFace {
 impl BarragoonFace {
     pub fn can_be_captured_from(&self, enter_dir: &Direction) -> bool {
         match self {
-            Self::ForceTurn => true,
+            Self::ForceTurn | Self::Blocking => true,
             Self::Straight { alignment: Ba::Vertical } => *enter_dir == Bd::North || *enter_dir == Bd::South,
             Self::Straight { alignment: Ba::Horizontal } => *enter_dir == Bd::West || *enter_dir == Bd::East,
-            Self::OneWay {
-                direction: one_way_direction,
-            } => one_way_direction == enter_dir,
-            Self::Blocking => true,
+            Self::OneWay { direction: one_way_dir } => one_way_dir == enter_dir,
             Self::OneWayTurnLeft { direction: Bd::South } | Self::OneWayTurnRight { direction: Bd::North } => *enter_dir == Bd::West,
             Self::OneWayTurnLeft { direction: Bd::North } | Self::OneWayTurnRight { direction: Bd::South } => *enter_dir == Bd::East,
             Self::OneWayTurnLeft { direction: Bd::East } | Self::OneWayTurnRight { direction: Bd::West } => *enter_dir == Bd::South,
@@ -112,7 +109,7 @@ struct Tile {
 }
 
 impl Tile {
-    pub fn to_fen_char(&self) -> char {
+    pub const fn as_fen_char(&self) -> char {
         match self.player {
             Player::White => match self.tile_type {
                 TileType::Two => 'Z',
@@ -129,10 +126,10 @@ impl Tile {
 }
 
 impl SquareContent {
-    pub fn to_fen_char(&self) -> char {
+    pub const fn as_fen_char(&self) -> char {
         match self {
             Self::Empty => ' ',
-            Self::Tile(tile) => tile.to_fen_char(),
+            Self::Tile(tile) => tile.as_fen_char(),
             Self::Barragoon(Bf::ForceTurn) => '+',
             Self::Barragoon(Bf::Straight { alignment: Ba::Vertical }) => '|',
             Self::Barragoon(Bf::Straight { alignment: Ba::Horizontal }) => '-',
@@ -154,8 +151,6 @@ impl SquareContent {
 }
 
 const BOARD_WIDTH: u8 = 7;
-#[allow(clippy::cast_possible_wrap)]
-const BOARD_WIDTH_SIGNED: i8 = BOARD_WIDTH as i8;
 const BOARD_HEIGHT: u8 = 9;
 #[allow(clippy::cast_possible_wrap)]
 const BOARD_HEIGHT_SIGNED: i8 = BOARD_HEIGHT as i8;
@@ -206,16 +201,14 @@ impl<'a> Iterator for SquareIterator<'a> {
             self.ifile = 0;
         }
 
-        let result: Option<Self::Item>;
-
-        if self.irank >= BOARD_HEIGHT {
-            result = None;
+        let result = if self.irank >= BOARD_HEIGHT {
+            None
         } else {
-            result = Some(SquareView {
+            Some(SquareView {
                 coordinate: Coordinate::new(self.irank, self.ifile),
                 content: &self.owner_game.board[self.irank as usize][self.ifile as usize],
-            });
-        }
+            })
+        };
 
         self.ifile += 1;
 
@@ -356,7 +349,7 @@ impl Game {
                         fen_string.push_str(&empty_count.to_string());
                         empty_count = 0;
                     }
-                    fen_string.push(square.to_fen_char());
+                    fen_string.push(square.as_fen_char());
                 }
             }
             if empty_count > 0 {
@@ -408,13 +401,13 @@ impl Game {
                         }
 
                         let target_square_content = self.get_content(&new_coordinate);
-                        
+
                         let is_last_step = full_step.leave_direction.is_none();
 
                         match target_square_content {
                             SC::Tile(attacked_tile) => {
                                 let Tile {
-                                    tile_type: attacked_tile_type,
+                                    tile_type: _,
                                     player: colliding_piece_player,
                                 } = attacked_tile;
                                 if (moving_piece_player == colliding_piece_player) || !is_last_step || !stride.can_capture() {
@@ -443,18 +436,17 @@ impl Game {
                                         break;
                                     }
                                 } else if stride.can_capture()
-                                        && face.can_be_captured_by(*moving_tile_type)
-                                        && face.can_be_captured_from(&full_step.enter_direction)
-                                    {
-                                        moves.push(Move::BarragoonCapture {
-                                            start: square.coordinate,
-                                            stop: new_coordinate,
-                                        });
-                                        covered_squares.insert(new_coordinate);
-                                    } else {
-                                        break;
-                                    }
-                                
+                                    && face.can_be_captured_by(*moving_tile_type)
+                                    && face.can_be_captured_from(&full_step.enter_direction)
+                                {
+                                    moves.push(Move::BarragoonCapture {
+                                        start: square.coordinate,
+                                        stop: new_coordinate,
+                                    });
+                                    covered_squares.insert(new_coordinate);
+                                } else {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -478,7 +470,7 @@ impl std::fmt::Display for Game {
             f.write_fmt(format_args!("{} ", RANK_NAMES[irank]))?;
             for square in rank {
                 write!(f, "| ")?;
-                f.write_fmt(format_args!("{}", square.to_fen_char()))?;
+                f.write_fmt(format_args!("{}", square.as_fen_char()))?;
                 write!(f, " ")?;
             }
             write!(f, "|\n  ")?;
@@ -520,13 +512,13 @@ enum Move {
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Self::Straight { moving_tile, start, stop } = self {
-            f.write_fmt(format_args!("{}{}{}", moving_tile.to_fen_char(), start, stop))?;
+            f.write_fmt(format_args!("{}{}{}", moving_tile.as_fen_char(), start, stop))?;
         } else if let Self::TileCapture {
             from: (attacker, start),
             to: (victim, stop),
         } = self
         {
-            f.write_fmt(format_args!("{}{}x{}{}", attacker.to_fen_char(), start, victim.to_fen_char(), stop))?;
+            f.write_fmt(format_args!("{}{}x{}{}", attacker.as_fen_char(), start, victim.as_fen_char(), stop))?;
         }
 
         write!(f, "")
@@ -550,7 +542,7 @@ fn main() {
 
     let mut buf_stdin = BufReader::new(io::stdin());
 
-    ubi_loop(&mut buf_stdin, &mut io::stdout()).expect("Something went wrong while reading input.");
+    run_loop(&mut buf_stdin, &mut io::stdout()).expect("Something went wrong while reading input.");
 }
 
 #[cfg(test)]

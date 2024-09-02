@@ -14,7 +14,7 @@ pub enum Direction {
 
 impl Direction {
     #[must_use]
-    pub fn turn_left(&self) -> Self {
+    pub const fn turn_left(&self) -> Self {
         match self {
             Self::North => Self::West,
             Self::West => Self::South,
@@ -24,7 +24,7 @@ impl Direction {
     }
 
     #[must_use]
-    pub fn turn_right(&self) -> Self {
+    pub const fn turn_right(&self) -> Self {
         match self {
             Self::North => Self::East,
             Self::East => Self::South,
@@ -69,7 +69,7 @@ pub struct PositionDelta {
 
 impl PositionDelta {
     #[must_use]
-    pub fn new(rank_delta: i8, file_delta: i8) -> Self {
+    pub const fn new(rank_delta: i8, file_delta: i8) -> Self {
         Self { rank_delta, file_delta }
     }
 
@@ -87,7 +87,7 @@ impl std::fmt::Display for PositionDelta {
 
 impl Coordinate {
     #[must_use]
-    pub fn new(rank: u8, file: u8) -> Self {
+    pub const fn new(rank: u8, file: u8) -> Self {
         Self { rank, file }
     }
 }

@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::Game;
-
 use crate::application;
+use crate::FenError;
 
 struct UbiHandler {
     state: UbiState,
@@ -35,27 +35,24 @@ impl UbiHandler {
     pub fn ubi(&mut self) -> Vec<String> {
         let mut answers = vec![];
 
-        match self.state {
-            UbiState::Unitialized => {
-                self.state = UbiState::WaitingForReady;
+        if self.state == UbiState::Unitialized {
+            self.state = UbiState::WaitingForReady;
 
-                let mut answer = String::new();
+            let mut answer = String::new();
 
-                write!(
-                    answer,
-                    "id name {} v{}.{}.{} author {}",
-                    application::ENGINE_NAME,
-                    application::VERSION_MAJOR,
-                    application::VERSION_MINOR,
-                    application::VERSION_PATCH,
-                    application::AUTHOR_NAME
-                )
-                .unwrap();
-                answers.push(answer);
-                answers.push(String::from("ubiok"));
-            }
-            _ => (),
-        };
+            write!(
+                answer,
+                "id name {} v{}.{}.{} author {}",
+                application::ENGINE_NAME,
+                application::VERSION_MAJOR,
+                application::VERSION_MINOR,
+                application::VERSION_PATCH,
+                application::AUTHOR_NAME
+            )
+            .unwrap();
+            answers.push(answer);
+            answers.push(String::from("ubiok"));
+        }
 
         answers
     }
@@ -77,25 +74,40 @@ impl UbiHandler {
     }
 
     pub fn position(&mut self, mut args: SplitWhitespace) -> Vec<String> {
+        let mut answers = vec![];
+        
         let start_position_mode = args.next();
 
-        match start_position_mode {
-            Some("startpos") => self.game = Game::new(),
-            Some("fen") => self.game = Game::from_fen(self.collect_residual_fen_args(&mut args).as_str()).unwrap(),
-            _ => (),
+        if start_position_mode == Some("startpos") {
+            self.game = Game::new();
+        } else if start_position_mode == Some("fen") {
+            let game_result = Game::from_fen(Self::collect_residual_fen_args(&mut args).as_str());
+            match game_result {
+                Ok(game) => self.game = game,
+                Err(FenError::UnderfullLine { char_index: ci } ) => answers.push(format!("Board rank is not filled at index {ci}.")),
+                Err(FenError::OverfullLine { char_index: ci } ) => answers.push(format!("Board rank is too full at index {ci}.")),
+                Err(FenError::TooManyLines { char_index: ci } ) => answers.push(format!("Board has to many ranks at index {ci}.")),
+                Err(FenError::InvalidChar { char_index: ci } ) => answers.push(format!("Board contains invalid char at index {ci}.")),
+            }
+        } else if let Some(subcommand) = start_position_mode {
+            answers.push(format!("Invalid subcommand {subcommand}."));
+        } else {
+            answers.push("Missing subcommand after 'position'.".to_string());
         }
 
         // println!("{}", self.game);
 
         self.state = UbiState::PositionSet;
-        vec![]
+        answers
     }
 
-    fn collect_residual_fen_args(&self, residual_args: &mut SplitWhitespace) -> String {
+    fn collect_residual_fen_args(residual_args: &mut SplitWhitespace) -> String {
         let mut fen_string = String::new();
 
         for arg in residual_args {
-            if arg == "moves" { break; }
+            if arg == "moves" {
+                break;
+            }
             fen_string.push_str(arg);
         }
 
@@ -103,7 +115,7 @@ impl UbiHandler {
     }
 }
 
-pub fn ubi_loop<S, T>(input: &mut S, output: &mut T) -> io::Result<()>
+pub fn run_loop<S, T>(input: &mut S, output: &mut T) -> io::Result<()>
 where
     S: Read + BufRead,
     T: Write,
@@ -144,13 +156,13 @@ struct SyncReader {
 }
 
 impl SyncReader {
-    pub fn new(recv: Receiver<u8>) -> Self {
+    pub const fn new(recv: Receiver<u8>) -> Self {
         Self { inner: recv }
     }
 }
 
 impl SyncWriter {
-    pub fn new(send: Sender<u8>) -> Self {
+    pub const fn new(send: Sender<u8>) -> Self {
         Self { inner: send }
     }
 }
@@ -225,7 +237,7 @@ mod tests {
 
     use crate::ubi::{SyncReader, SyncWriter};
 
-    use super::ubi_loop;
+    use super::run_loop;
     use std::fmt::Write as FmtWrite;
 
     fn connect_to_ubi_loop() -> (
@@ -241,7 +253,7 @@ mod tests {
         let mut output_send = SyncWriter::new(output_tx);
         let output_recv = BufReader::new(SyncReader::new(output_rx));
 
-        let ubi_thread = thread::spawn(move || ubi_loop(&mut input_recv, &mut output_send));
+        let ubi_thread = thread::spawn(move || run_loop(&mut input_recv, &mut output_send));
 
         (input_send, output_recv, ubi_thread)
     }
