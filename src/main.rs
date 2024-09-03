@@ -8,6 +8,8 @@ use crate::navigation::Direction;
 use crate::tiles::TileType;
 use crate::ubi::run_loop;
 
+use std::slice::Iter;
+
 pub mod application;
 pub mod navigation;
 pub mod tiles;
@@ -86,6 +88,52 @@ impl BarragoonFace {
                 direction: barragoon_direction,
             } => is_right_turn && leave_dir == barragoon_direction,
         }
+    }
+
+    pub fn all_faces() -> Iter<'static, Self> {
+        static FACES: [BarragoonFace; 16] = [
+            Bf::Blocking,
+            Bf::Straight { alignment: Ba::Horizontal },
+            Bf::Straight { alignment: Ba::Vertical },
+            Bf::OneWay {
+                direction: Direction::North,
+            },
+            Bf::OneWay {
+                direction: Direction::South,
+            },
+            Bf::OneWay {
+                direction: Direction::East,
+            },
+            Bf::OneWay {
+                direction: Direction::West,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::North,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::South,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::East,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::West,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::North,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::South,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::East,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::West,
+            },
+            Bf::ForceTurn,
+        ];
+        FACES.iter()
     }
 }
 
@@ -192,6 +240,11 @@ struct SquareIterator<'a> {
     irank: u8,
 }
 
+#[derive(Debug)]
+enum MoveError {
+    ForeignConstructedMoveUsed = 0,
+}
+
 impl<'a> Iterator for SquareIterator<'a> {
     type Item = SquareView<'a>;
 
@@ -233,12 +286,39 @@ impl Game {
         }
     }
 
+    pub fn make_move(&mut self, game_move: &Move) -> Result<(), MoveError> {
+        let moves_vector = self.valid_moves();
+        let valid_moves: HashSet<&Move> = moves_vector.iter().collect();
+
+        if !valid_moves.contains(&game_move) {
+            return Err(MoveError::ForeignConstructedMoveUsed);
+        }
+
+        match game_move {
+            Move::Straight { moving_tile, start, stop } => {
+                self.move_content(start, stop);
+            }
+            _ => panic!("Not implemtented yet"),
+        }
+
+        Ok(())
+    }
+
     pub const fn contains_coordinate(coordinate: &Coordinate) -> bool {
         coordinate.rank < BOARD_HEIGHT && coordinate.file < BOARD_WIDTH
     }
 
     pub const fn get_content(&self, coordinate: &Coordinate) -> &SquareContent {
         &self.board[coordinate.rank as usize][coordinate.file as usize]
+    }
+
+    pub fn set_content(&mut self, coordinate: &Coordinate, content: &SquareContent) {
+        self.board[coordinate.rank as usize][coordinate.file as usize] = *content;
+    }
+
+    pub fn move_content(&mut self, from: &Coordinate, to: &Coordinate) {
+        self.board[to.rank as usize][to.file as usize] = self.board[from.rank as usize][from.file as usize];
+        self.board[from.rank as usize][from.file as usize] = SquareContent::Empty;
     }
 
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
@@ -439,10 +519,23 @@ impl Game {
                                     && face.can_be_captured_by(*moving_tile_type)
                                     && face.can_be_captured_from(&full_step.enter_direction)
                                 {
-                                    moves.push(Move::BarragoonCapture {
-                                        start: square.coordinate,
-                                        stop: new_coordinate,
-                                    });
+                                    for face in BarragoonFace::all_faces() {
+                                        for barragoon_square in self.squares() {
+                                            if barragoon_square.content != &SquareContent::Empty
+                                                && barragoon_square.coordinate != square.coordinate
+                                            {
+                                                continue;
+                                            }
+                                            moves.push(Move::BarragoonCapture {
+                                                start: square.coordinate,
+                                                stop: new_coordinate,
+                                                barragoon: BarragoonPlacement {
+                                                    face: *face,
+                                                    coordinate: square.coordinate,
+                                                },
+                                            });
+                                        }
+                                    }
                                     covered_squares.insert(new_coordinate);
                                 } else {
                                     break;
@@ -493,6 +586,12 @@ const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6',
 const FILE_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+struct BarragoonPlacement {
+    coordinate: Coordinate,
+    face: BarragoonFace,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Move {
     Straight {
         moving_tile: Tile,
@@ -506,6 +605,10 @@ enum Move {
     BarragoonCapture {
         start: Coordinate,
         stop: Coordinate,
+        barragoon: BarragoonPlacement,
+    },
+    BarragoonPut {
+        barragoon: BarragoonPlacement,
     },
 }
 
@@ -801,10 +904,30 @@ mod tests {
         let moves = game.valid_moves();
 
         for move_ in &moves {
-            if let Move::BarragoonCapture { start: _, stop: _ } = move_ {
+            if let Move::BarragoonCapture {
+                start: _,
+                stop: _,
+                barragoon: _,
+            } = move_
+            {
                 assert!(false);
             }
         }
+    }
+
+    #[test]
+    fn two_piece_and_a_barragoon_have_1003_moves() {
+        let mut game = Game::empty();
+        game.set_content(
+            &Coordinate::new(4, 3),
+            &SquareContent::Tile(Tile {
+                tile_type: TileType::Two,
+                player: Player::White,
+            }),
+        );
+        game.set_content(&Coordinate::new(2, 3), &SquareContent::Barragoon(BarragoonFace::Blocking));
+
+        assert_eq!(game.valid_moves().len(), 7 + 4 + 62 * 16);
     }
 
     #[test]
@@ -824,7 +947,12 @@ mod tests {
             let mut found_capture = false;
 
             for move_ in &moves {
-                if let Move::BarragoonCapture { start: _, stop: _ } = move_ {
+                if let Move::BarragoonCapture {
+                    start: _,
+                    stop: _,
+                    barragoon: _,
+                } = move_
+                {
                     found_capture = true;
                 }
             }
