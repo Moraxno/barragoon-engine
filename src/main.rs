@@ -8,6 +8,8 @@ use crate::navigation::Direction;
 use crate::tiles::TileType;
 use crate::ubi::run_loop;
 
+use std::slice::Iter;
+
 pub mod application;
 pub mod navigation;
 pub mod tiles;
@@ -107,6 +109,52 @@ impl BarragoonFace {
             Bf::OneWayTurnRight { direction: Bd::East } => 'e',
             Bf::OneWayTurnRight { direction: Bd::West } => 'w',
         }
+    }
+
+    pub fn all_faces() -> Iter<'static, Self> {
+        static FACES: [BarragoonFace; 16] = [
+            Bf::Blocking,
+            Bf::Straight { alignment: Ba::Horizontal },
+            Bf::Straight { alignment: Ba::Vertical },
+            Bf::OneWay {
+                direction: Direction::North,
+            },
+            Bf::OneWay {
+                direction: Direction::South,
+            },
+            Bf::OneWay {
+                direction: Direction::East,
+            },
+            Bf::OneWay {
+                direction: Direction::West,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::North,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::South,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::East,
+            },
+            Bf::OneWayTurnLeft {
+                direction: Direction::West,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::North,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::South,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::East,
+            },
+            Bf::OneWayTurnRight {
+                direction: Direction::West,
+            },
+            Bf::ForceTurn,
+        ];
+        FACES.iter()
     }
 }
 
@@ -213,6 +261,11 @@ struct SquareIterator<'a> {
     irank: u8,
 }
 
+#[derive(Debug)]
+enum MoveError {
+    ForeignConstructedMoveUsed = 0,
+}
+
 impl<'a> Iterator for SquareIterator<'a> {
     type Item = SquareView<'a>;
 
@@ -254,6 +307,24 @@ impl Game {
         }
     }
 
+    pub fn make_move(&mut self, game_move: &Move) -> Result<(), MoveError> {
+        let moves_vector = self.valid_moves();
+        let valid_moves: HashSet<&Move> = moves_vector.iter().collect();
+
+        if !valid_moves.contains(&game_move) {
+            return Err(MoveError::ForeignConstructedMoveUsed);
+        }
+
+        match game_move {
+            Move::Straight { moving_tile, start, stop } => {
+                self.move_content(start, stop);
+            }
+            _ => panic!("Not implemtented yet"),
+        }
+
+        Ok(())
+    }
+
     pub const fn contains_coordinate(coordinate: &Coordinate) -> bool {
         coordinate.rank < BOARD_HEIGHT && coordinate.file < BOARD_WIDTH
     }
@@ -264,6 +335,11 @@ impl Game {
 
     pub fn set_content(&mut self, coordinate: &Coordinate, content: &SquareContent) {
         self.board[coordinate.rank as usize][coordinate.file as usize] = *content;
+    }
+
+    pub fn move_content(&mut self, from: &Coordinate, to: &Coordinate) {
+        self.board[to.rank as usize][to.file as usize] = self.board[from.rank as usize][from.file as usize];
+        self.board[from.rank as usize][from.file as usize] = SquareContent::Empty;
     }
 
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
@@ -547,6 +623,12 @@ impl std::fmt::Display for Game {
 
 const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const FILE_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+struct BarragoonPlacement {
+    coordinate: Coordinate,
+    face: BarragoonFace,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum BoardMove {
@@ -845,5 +927,101 @@ mod tests {
         let unique_moves: HashSet<BoardMove> = moves.clone().into_iter().collect();
 
         assert_eq!(moves.len(), unique_moves.len());
+    }
+
+    macro_rules! piece_has_n_moves {
+        ($($name:ident: $type:expr, $move_num:expr ), *) => {
+        $(
+            #[test]
+            fn $name() {
+                let mut game = Game::empty();
+                game.board[4][3] = SC::Tile(Tile {
+                    tile_type: $type,
+                    player: Player::White,
+                });
+                let moves = game.valid_moves();
+
+                for move_ in &moves {
+                    println!("{}", move_);
+                }
+                assert_eq!(moves.len(), $move_num);
+            }
+        )*
+        }
+    }
+
+    piece_has_n_moves! {
+        two_has_twelve_moves: TileType::Two, 12,
+        three_has_twenty_moves: TileType::Three, 20,
+        four_has_twenty_six_moves: TileType::Four, 26
+    }
+
+    #[test]
+    fn two_piece_cannot_capture_force_turn() {
+        let mut game = Game::empty();
+        game.board[4][3] = SC::Tile(Tile {
+            tile_type: TileType::Two,
+            player: Player::White,
+        });
+        game.board[4][1] = SC::Barragoon(BarragoonFace::ForceTurn);
+
+        let moves = game.valid_moves();
+
+        for move_ in &moves {
+            if let Move::BarragoonCapture {
+                start: _,
+                stop: _,
+                barragoon: _,
+            } = move_
+            {
+                assert!(false);
+            }
+        }
+    }
+
+    #[test]
+    fn two_piece_and_a_barragoon_have_1003_moves() {
+        let mut game = Game::empty();
+        game.set_content(
+            &Coordinate::new(4, 3),
+            &SquareContent::Tile(Tile {
+                tile_type: TileType::Two,
+                player: Player::White,
+            }),
+        );
+        game.set_content(&Coordinate::new(2, 3), &SquareContent::Barragoon(BarragoonFace::Blocking));
+
+        assert_eq!(game.valid_moves().len(), 7 + 4 + 62 * 16);
+    }
+
+    #[test]
+    fn three_piece_can_capture_force_turn() {
+        let mut game = Game::empty();
+
+        game.board[4][3] = SC::Tile(Tile {
+            tile_type: TileType::Three,
+            player: Player::White,
+        });
+
+        for [file_idx, rank_idx] in [[4, 0], [3, 1], [2, 2], [1, 3]] {
+            game.board[file_idx][rank_idx] = SC::Barragoon(BarragoonFace::ForceTurn);
+
+            let moves = game.valid_moves();
+
+            let mut found_capture = false;
+
+            for move_ in &moves {
+                if let Move::BarragoonCapture {
+                    start: _,
+                    stop: _,
+                    barragoon: _,
+                } = move_
+                {
+                    found_capture = true;
+                }
+            }
+
+            assert!(found_capture);
+        }
     }
 }
