@@ -87,6 +87,27 @@ impl BarragoonFace {
             } => is_right_turn && leave_dir == barragoon_direction,
         }
     }
+
+    pub fn as_fen_char(&self) -> char {
+        match self {
+            Bf::ForceTurn => '+',
+            Bf::Straight { alignment: Ba::Vertical } => '|',
+            Bf::Straight { alignment: Ba::Horizontal } => '-',
+            Bf::OneWay { direction: Bd::South } => 'Y',
+            Bf::OneWay { direction: Bd::North } => '^',
+            Bf::OneWay { direction: Bd::West } => '<',
+            Bf::OneWay { direction: Bd::East } => '>',
+            Bf::Blocking => 'x',
+            Bf::OneWayTurnLeft { direction: Bd::South } => 'S',
+            Bf::OneWayTurnLeft { direction: Bd::North } => 'N',
+            Bf::OneWayTurnLeft { direction: Bd::East } => 'E',
+            Bf::OneWayTurnLeft { direction: Bd::West } => 'W',
+            Bf::OneWayTurnRight { direction: Bd::South } => 's',
+            Bf::OneWayTurnRight { direction: Bd::North } => 'n',
+            Bf::OneWayTurnRight { direction: Bd::East } => 'e',
+            Bf::OneWayTurnRight { direction: Bd::West } => 'w',
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -241,6 +262,10 @@ impl Game {
         &self.board[coordinate.rank as usize][coordinate.file as usize]
     }
 
+    pub fn set_content(&mut self, coordinate: &Coordinate, content: &SquareContent) {
+        self.board[coordinate.rank as usize][coordinate.file as usize] = *content;
+    }
+
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let mut board: [[SC; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize] = [[SC::Empty; BOARD_WIDTH as usize]; BOARD_HEIGHT as usize];
 
@@ -336,6 +361,31 @@ impl Game {
         })
     }
 
+    pub fn make_move(&mut self, board_move: &BoardMove) -> bool {
+        let valid_moves: HashSet<BoardMove> = self.valid_moves().into_iter().collect();
+
+        if !valid_moves.contains(board_move) {
+            return false;
+        }
+
+        match board_move {
+            BoardMove::Straight { start, stop, tile } | BoardMove::TileCapture { start, stop, tile, victim: _ } => {
+                self.set_content(stop, &SquareContent::Tile(*tile));
+                self.set_content(start, &SquareContent::Empty);
+            },
+            BoardMove::BarragoonCapture { start, stop, tile, victim, target, barragoon } => {
+                self.set_content(stop, &SquareContent::Tile(*tile));
+                self.set_content(start, &SquareContent::Empty);
+                self.set_content(target, &SquareContent::Barragoon(*barragoon));
+            },
+            BoardMove::BarragoonPlacement { target, barragoon } => {
+                self.set_content(target, &SquareContent::Barragoon(*barragoon));
+            }
+        }
+
+        true
+    }
+
     pub fn as_fen(&self) -> String {
         let mut fen_string = String::new();
 
@@ -363,7 +413,7 @@ impl Game {
         fen_string
     }
 
-    pub fn valid_moves(&self) -> Vec<Move> {
+    pub fn valid_moves(&self) -> Vec<BoardMove> {
         let mut moves = vec![];
 
         for square in self.squares() {
@@ -414,16 +464,13 @@ impl Game {
                                     break;
                                 }
 
-                                moves.push(Move::TileCapture {
-                                    from: (*moving_tile, square.coordinate),
-                                    to: (*attacked_tile, new_coordinate),
-                                });
+                                moves.push(BoardMove::TileCapture { start: square.coordinate, stop: new_coordinate, tile: *moving_tile, victim: *attacked_tile });
                                 covered_squares.insert(new_coordinate);
                             }
                             SC::Empty => {
                                 if is_last_step {
-                                    moves.push(Move::Straight {
-                                        moving_tile: *moving_tile,
+                                    moves.push(BoardMove::Straight {
+                                        tile: *moving_tile,
                                         start: square.coordinate,
                                         stop: new_coordinate,
                                     });
@@ -439,10 +486,19 @@ impl Game {
                                     && face.can_be_captured_by(*moving_tile_type)
                                     && face.can_be_captured_from(&full_step.enter_direction)
                                 {
-                                    moves.push(Move::BarragoonCapture {
-                                        start: square.coordinate,
-                                        stop: new_coordinate,
-                                    });
+                                    for square in self.squares() {
+                                        if *square.content != SquareContent::Empty {
+                                            continue
+                                        }
+                                        
+                                        moves.push(BoardMove::BarragoonCapture {
+                                            start: square.coordinate,
+                                            stop: new_coordinate,
+                                            tile: *moving_tile,
+                                            barragoon: *face,
+                                            target: square.coordinate,
+                                        });
+                                    }
                                     covered_squares.insert(new_coordinate);
                                 } else {
                                     break;
@@ -493,35 +549,49 @@ const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6',
 const FILE_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum Move {
+enum BoardMove {
     Straight {
-        moving_tile: Tile,
         start: Coordinate,
         stop: Coordinate,
+        tile: Tile,
     },
     TileCapture {
-        from: (Tile, Coordinate),
-        to: (Tile, Coordinate),
+        start: Coordinate,
+        stop: Coordinate,
+        tile: Tile,
+        victim: Tile,
     },
     BarragoonCapture {
         start: Coordinate,
         stop: Coordinate,
+        tile: Tile,
+        victim: BarragoonFace,
+        target: Coordinate,
+        barragoon: BarragoonFace,
+    },
+    BarragoonPlacement {
+        target: Coordinate,
+        barragoon: BarragoonFace,
     },
 }
 
-impl std::fmt::Display for Move {
+impl std::fmt::Display for BoardMove {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Self::Straight { moving_tile, start, stop } = self {
-            f.write_fmt(format_args!("{}{}{}", moving_tile.as_fen_char(), start, stop))?;
-        } else if let Self::TileCapture {
-            from: (attacker, start),
-            to: (victim, stop),
-        } = self
-        {
-            f.write_fmt(format_args!("{}{}x{}{}", attacker.as_fen_char(), start, victim.as_fen_char(), stop))?;
-        }
-
-        write!(f, "")
+        return match &self {
+            Self::Straight { start, stop, tile } => write!(f, "{}{}{}", tile.as_fen_char(), start, stop),
+            Self::TileCapture { start, stop, tile, victim } => {
+                write!(f, "{}{}x{}{}", tile.as_fen_char(), start, victim.as_fen_char(), stop)
+            }
+            Self::BarragoonCapture {
+                start,
+                stop,
+                tile: Tile,
+                victim,
+                target,
+                barragoon,
+            } => write!(f, "{}{}o{}{}!{}{}", tile.as_fen_char(), start, victim.as_fen_char(), stop, barragoon.as_fen_char(), target),
+            Self::BarragoonPlacement { target, barragoon } => write!(f, "!{}{}", barragoon.as_fen_char(), target),
+        };
     }
 }
 
@@ -749,15 +819,30 @@ mod tests {
     }
 
     #[test]
-    fn initial_gamestate_allowed_moves() {
+    fn initial_gamestate_has_28_straight_moves() {
         let moves = Game::new().valid_moves();
         assert_eq!(moves.len(), 28);
+        let straight_moves = moves.iter().filter(|move_| match move_ { BoardMove::Straight { start: _, stop: _ , tile: _ } => true, _ => false });
+        assert_eq!(straight_moves.collect::<Vec<&BoardMove>>().len(), 28)
+    }
+
+    #[test]
+    fn game_makes_a_valid_move() {
+        let mut g = Game::new();
+        let start_pos = Coordinate {rank: 1, file: 2 };
+        let stop_pos = Coordinate { rank: 3, file: 2};
+        let tile = Tile { tile_type: TileType::Two, player: Player::White };
+        let board_move = BoardMove::Straight { start: start_pos, stop: stop_pos, tile: tile };
+        g.make_move(&board_move);
+
+        assert_eq!(g.get_content(&start_pos), &SC::Empty);
+        assert_eq!(g.get_content(&stop_pos), &SC::Tile(tile));
     }
 
     #[test]
     fn initial_gamestate_moves_are_unique() {
         let moves = Game::new().valid_moves();
-        let unique_moves: HashSet<Move> = moves.clone().into_iter().collect();
+        let unique_moves: HashSet<BoardMove> = moves.clone().into_iter().collect();
 
         assert_eq!(moves.len(), unique_moves.len());
     }
