@@ -243,7 +243,6 @@ mod tests {
     use crate::ubi::{SyncReader, SyncWriter};
 
     use super::run_loop;
-    use std::fmt::Write as FmtWrite;
 
     fn connect_to_ubi_loop() -> (
         SyncWriter,

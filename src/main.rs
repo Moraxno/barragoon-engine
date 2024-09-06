@@ -8,154 +8,18 @@ use crate::navigation::Direction;
 use crate::tiles::TileType;
 use crate::ubi::run_loop;
 
-use std::slice::Iter;
-
 pub mod application;
 pub mod navigation;
+pub mod pieces;
 pub mod tiles;
 pub mod ubi;
+
+use crate::pieces::barragoon::{Alignment, BarragoonFace};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Player {
     White,
     Brown,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum BarragoonAlignment {
-    Horizontal,
-    Vertical,
-}
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum BarragoonFace {
-    Blocking,
-    Straight { alignment: BarragoonAlignment },
-    OneWay { direction: Direction },
-    OneWayTurnLeft { direction: Direction },
-    OneWayTurnRight { direction: Direction },
-    ForceTurn,
-}
-
-impl BarragoonFace {
-    pub fn can_be_captured_from(&self, enter_dir: &Direction) -> bool {
-        match self {
-            Self::ForceTurn | Self::Blocking => true,
-            Self::Straight { alignment: Ba::Vertical } => *enter_dir == Bd::North || *enter_dir == Bd::South,
-            Self::Straight { alignment: Ba::Horizontal } => *enter_dir == Bd::West || *enter_dir == Bd::East,
-            Self::OneWay { direction: one_way_dir } => one_way_dir == enter_dir,
-            Self::OneWayTurnLeft { direction: Bd::South } | Self::OneWayTurnRight { direction: Bd::North } => *enter_dir == Bd::West,
-            Self::OneWayTurnLeft { direction: Bd::North } | Self::OneWayTurnRight { direction: Bd::South } => *enter_dir == Bd::East,
-            Self::OneWayTurnLeft { direction: Bd::East } | Self::OneWayTurnRight { direction: Bd::West } => *enter_dir == Bd::South,
-            Self::OneWayTurnLeft { direction: Bd::West } | Self::OneWayTurnRight { direction: Bd::East } => *enter_dir == Bd::North,
-        }
-    }
-
-    pub fn can_be_captured_by(&self, tile_type: TileType) -> bool {
-        tile_type != TileType::Two || *self != Self::ForceTurn
-    }
-
-    pub fn can_be_traversed(self, enter_dir: Direction, leave_dir: Direction) -> bool {
-        let is_horizontal = enter_dir == Bd::East && leave_dir == Bd::West || enter_dir == Bd::West && leave_dir == Bd::East;
-
-        let is_vertical = enter_dir == Bd::South && leave_dir == Bd::North || enter_dir == Bd::North && leave_dir == Bd::South;
-
-        let is_left_turn = enter_dir == Bd::North && leave_dir == Bd::West
-            || enter_dir == Bd::South && leave_dir == Bd::East
-            || enter_dir == Bd::East && leave_dir == Bd::North
-            || enter_dir == Bd::West && leave_dir == Bd::South;
-
-        let is_right_turn = enter_dir == Bd::North && leave_dir == Bd::East
-            || enter_dir == Bd::South && leave_dir == Bd::West
-            || enter_dir == Bd::East && leave_dir == Bd::South
-            || enter_dir == Bd::West && leave_dir == Bd::North;
-
-        if u8::from(is_horizontal) + u8::from(is_vertical) + u8::from(is_left_turn) + u8::from(is_right_turn) != 1 {
-            return false;
-        }
-
-        match self {
-            Self::ForceTurn => is_left_turn || is_right_turn,
-            Self::Straight { alignment: Ba::Vertical } => is_vertical,
-            Self::Straight { alignment: Ba::Horizontal } => is_horizontal,
-            Self::OneWay {
-                direction: one_way_direction,
-            } => one_way_direction == enter_dir && (is_horizontal || is_vertical),
-            Self::Blocking => false,
-            Self::OneWayTurnLeft {
-                direction: barragoon_direction,
-            } => is_left_turn && leave_dir == barragoon_direction,
-            Self::OneWayTurnRight {
-                direction: barragoon_direction,
-            } => is_right_turn && leave_dir == barragoon_direction,
-        }
-    }
-
-    pub fn as_fen_char(&self) -> char {
-        match self {
-            Bf::ForceTurn => '+',
-            Bf::Straight { alignment: Ba::Vertical } => '|',
-            Bf::Straight { alignment: Ba::Horizontal } => '-',
-            Bf::OneWay { direction: Bd::South } => 'Y',
-            Bf::OneWay { direction: Bd::North } => '^',
-            Bf::OneWay { direction: Bd::West } => '<',
-            Bf::OneWay { direction: Bd::East } => '>',
-            Bf::Blocking => 'x',
-            Bf::OneWayTurnLeft { direction: Bd::South } => 'S',
-            Bf::OneWayTurnLeft { direction: Bd::North } => 'N',
-            Bf::OneWayTurnLeft { direction: Bd::East } => 'E',
-            Bf::OneWayTurnLeft { direction: Bd::West } => 'W',
-            Bf::OneWayTurnRight { direction: Bd::South } => 's',
-            Bf::OneWayTurnRight { direction: Bd::North } => 'n',
-            Bf::OneWayTurnRight { direction: Bd::East } => 'e',
-            Bf::OneWayTurnRight { direction: Bd::West } => 'w',
-        }
-    }
-
-    pub fn all_faces() -> Iter<'static, Self> {
-        static FACES: [BarragoonFace; 16] = [
-            Bf::Blocking,
-            Bf::Straight { alignment: Ba::Horizontal },
-            Bf::Straight { alignment: Ba::Vertical },
-            Bf::OneWay {
-                direction: Direction::North,
-            },
-            Bf::OneWay {
-                direction: Direction::South,
-            },
-            Bf::OneWay {
-                direction: Direction::East,
-            },
-            Bf::OneWay {
-                direction: Direction::West,
-            },
-            Bf::OneWayTurnLeft {
-                direction: Direction::North,
-            },
-            Bf::OneWayTurnLeft {
-                direction: Direction::South,
-            },
-            Bf::OneWayTurnLeft {
-                direction: Direction::East,
-            },
-            Bf::OneWayTurnLeft {
-                direction: Direction::West,
-            },
-            Bf::OneWayTurnRight {
-                direction: Direction::North,
-            },
-            Bf::OneWayTurnRight {
-                direction: Direction::South,
-            },
-            Bf::OneWayTurnRight {
-                direction: Direction::East,
-            },
-            Bf::OneWayTurnRight {
-                direction: Direction::West,
-            },
-            Bf::ForceTurn,
-        ];
-        FACES.iter()
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -250,7 +114,7 @@ enum FenParseObject {
     InvalidChar,
 }
 type Fpo = FenParseObject;
-type Ba = BarragoonAlignment;
+type Ba = Alignment;
 type Bd = Direction;
 type Bf = BarragoonFace;
 
@@ -419,29 +283,42 @@ impl Game {
         })
     }
 
-    pub fn make_move(&mut self, board_move: &BoardMove) -> bool {
+    pub fn make_move(&mut self, board_move: &BoardMove) -> Result<(), MoveError> {
         let valid_moves: HashSet<BoardMove> = self.valid_moves().into_iter().collect();
 
         if !valid_moves.contains(board_move) {
-            return false;
+            return Err(MoveError::ForeignConstructedMoveUsed);
         }
 
         match board_move {
-            BoardMove::Straight { start, stop, tile } | BoardMove::TileCapture { start, stop, tile, victim: _ } => {
+            BoardMove::Straight { start, stop, tile }
+            | BoardMove::TileCapture {
+                start,
+                stop,
+                tile,
+                victim: _,
+            } => {
                 self.set_content(stop, &SquareContent::Tile(*tile));
                 self.set_content(start, &SquareContent::Empty);
-            },
-            BoardMove::BarragoonCapture { start, stop, tile, victim: _, target, barragoon } => {
+            }
+            BoardMove::BarragoonCapture {
+                start,
+                stop,
+                tile,
+                victim: _,
+                target,
+                barragoon,
+            } => {
                 self.set_content(stop, &SquareContent::Tile(*tile));
                 self.set_content(start, &SquareContent::Empty);
                 self.set_content(target, &SquareContent::Barragoon(*barragoon));
-            },
+            }
             BoardMove::BarragoonPlacement { target, barragoon } => {
                 self.set_content(target, &SquareContent::Barragoon(*barragoon));
             }
         }
 
-        true
+        Ok(())
     }
 
     pub fn as_fen(&self) -> String {
@@ -522,7 +399,12 @@ impl Game {
                                     break;
                                 }
 
-                                moves.push(BoardMove::TileCapture { start: square.coordinate, stop: new_coordinate, tile: *moving_tile, victim: *attacked_tile });
+                                moves.push(BoardMove::TileCapture {
+                                    start: square.coordinate,
+                                    stop: new_coordinate,
+                                    tile: *moving_tile,
+                                    victim: *attacked_tile,
+                                });
                                 covered_squares.insert(new_coordinate);
                             }
                             SC::Empty => {
@@ -545,8 +427,9 @@ impl Game {
                                     && face.can_be_captured_from(&full_step.enter_direction)
                                 {
                                     for target_square in self.squares() {
-                                        if *target_square.content != SquareContent::Empty && target_square.coordinate != square.coordinate {
-                                            continue
+                                        if *target_square.content != SquareContent::Empty && target_square.coordinate != square.coordinate
+                                        {
+                                            continue;
                                         }
 
                                         for new_face in BarragoonFace::all_faces() {
@@ -656,7 +539,16 @@ impl std::fmt::Display for BoardMove {
                 victim,
                 target,
                 barragoon,
-            } => write!(f, "{}{}o{}{}!{}{}", tile.as_fen_char(), start, victim.as_fen_char(), stop, barragoon.as_fen_char(), target),
+            } => write!(
+                f,
+                "{}{}o{}{}!{}{}",
+                tile.as_fen_char(),
+                start,
+                victim.as_fen_char(),
+                stop,
+                barragoon.as_fen_char(),
+                target
+            ),
             Self::BarragoonPlacement { target, barragoon } => write!(f, "!{}{}", barragoon.as_fen_char(), target),
         };
     }
@@ -889,19 +781,35 @@ mod tests {
     fn initial_gamestate_has_28_straight_moves() {
         let moves = Game::new().valid_moves();
         assert_eq!(moves.len(), 28);
-        let straight_moves = moves.iter().filter(|move_| match move_ { BoardMove::Straight { start: _, stop: _ , tile: _ } => true, _ => false });
+        let straight_moves = moves.iter().filter(|move_| match move_ {
+            BoardMove::Straight {
+                start: _,
+                stop: _,
+                tile: _,
+            } => true,
+            _ => false,
+        });
         assert_eq!(straight_moves.collect::<Vec<&BoardMove>>().len(), 28)
     }
 
     #[test]
     fn game_makes_a_valid_move() {
         let mut g = Game::new();
-        let start_pos = Coordinate {rank: 1, file: 2 };
-        let stop_pos = Coordinate { rank: 3, file: 2};
-        let tile = Tile { tile_type: TileType::Two, player: Player::White };
-        let board_move = BoardMove::Straight { start: start_pos, stop: stop_pos, tile: tile };
-        g.make_move(&board_move);
+        let start_pos = Coordinate { rank: 1, file: 2 };
+        let stop_pos = Coordinate { rank: 3, file: 2 };
+        let tile = Tile {
+            tile_type: TileType::Two,
+            player: Player::White,
+        };
+        let board_move = BoardMove::Straight {
+            start: start_pos,
+            stop: stop_pos,
+            tile: tile,
+        };
+        
+        let r = g.make_move(&board_move);
 
+        assert!(r.is_ok());
         assert_eq!(g.get_content(&start_pos), &SC::Empty);
         assert_eq!(g.get_content(&stop_pos), &SC::Tile(tile));
     }
@@ -909,15 +817,28 @@ mod tests {
     #[test]
     fn game_denies_invalid_move() {
         let mut g = Game::new();
-        let start_pos = Coordinate {rank: 1, file: 2 };
-        let stop_pos = Coordinate { rank: 8, file: 2};
-        let tile = Tile { tile_type: TileType::Two, player: Player::White };
-        let board_move = BoardMove::Straight { start: start_pos, stop: stop_pos, tile: tile };
+        let start_pos = Coordinate { rank: 1, file: 2 };
+        let stop_pos = Coordinate { rank: 8, file: 2 };
+        let tile = Tile {
+            tile_type: TileType::Two,
+            player: Player::White,
+        };
+        let board_move = BoardMove::Straight {
+            start: start_pos,
+            stop: stop_pos,
+            tile: tile,
+        };
         let result = g.make_move(&board_move);
 
-        assert_eq!(result, false);
+        assert!(result.is_err());
         assert_eq!(g.get_content(&start_pos), &SC::Tile(tile));
-        assert_eq!(g.get_content(&stop_pos), &SC::Tile (Tile { tile_type: TileType::Three, player: Player::Brown }));
+        assert_eq!(
+            g.get_content(&stop_pos),
+            &SC::Tile(Tile {
+                tile_type: TileType::Three,
+                player: Player::Brown
+            })
+        );
     }
 
     #[test]
@@ -967,8 +888,7 @@ mod tests {
         let moves = game.valid_moves();
 
         for move_ in &moves {
-            if let BoardMove::BarragoonCapture {..} = move_
-            {
+            if let BoardMove::BarragoonCapture { .. } = move_ {
                 assert!(false);
             }
         }
@@ -1009,8 +929,7 @@ mod tests {
             let mut found_capture = false;
 
             for move_ in &moves {
-                if let BoardMove::BarragoonCapture { .. } = move_
-                {
+                if let BoardMove::BarragoonCapture { .. } = move_ {
                     found_capture = true;
                 }
             }
