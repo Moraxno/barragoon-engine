@@ -5,13 +5,12 @@ use std::io::{self, BufReader};
 use navigation::Coordinate;
 
 use crate::navigation::Direction;
-use crate::tiles::TileType;
+use crate::pieces::tiles::TileType;
 use crate::ubi::run_loop;
 
 pub mod application;
 pub mod navigation;
 pub mod pieces;
-pub mod tiles;
 pub mod ubi;
 
 use crate::pieces::barragoon::{Alignment, BarragoonFace};
@@ -806,7 +805,7 @@ mod tests {
             stop: stop_pos,
             tile: tile,
         };
-        
+
         let r = g.make_move(&board_move);
 
         assert!(r.is_ok());
