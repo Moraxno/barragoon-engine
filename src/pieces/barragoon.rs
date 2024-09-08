@@ -128,3 +128,31 @@ impl BarragoonFace {
         FACES.iter()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Ba, Tile};
+
+    use super::*;
+
+    use strum::IntoEnumIterator;
+    use strum_macros::EnumIter;
+
+    #[test]
+    fn force_turn_cannot_be_captured_by_two() {
+        assert!(!BarragoonFace::ForceTurn.can_be_captured_by(TileType::Two));
+    }
+
+    #[test]
+    fn other_faces_and_types_are_always_capturable() {
+        for face in BarragoonFace::all_faces() {
+            for tile_type in TileType::iter() {
+                if *face == BarragoonFace::ForceTurn && tile_type == TileType::Two {
+                    continue;
+                }
+
+                assert!(face.can_be_captured_by(tile_type));
+            }
+        }
+    }
+}
