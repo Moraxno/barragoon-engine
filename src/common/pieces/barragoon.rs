@@ -1,7 +1,7 @@
 use std::slice::Iter;
 
-use crate::navigation::Direction;
-use crate::tiles::TileType;
+use crate::common::navigation::Direction;
+use crate::common::tiles::TileType;
 
 type Dir = Direction;
 

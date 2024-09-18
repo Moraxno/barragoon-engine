@@ -2,18 +2,16 @@
 use std::collections::HashSet;
 use std::io::{self, BufReader};
 
-use navigation::Coordinate;
+use barragoon_engine::common::{navigation, tiles, pieces};
 
-use crate::navigation::Direction;
-use crate::tiles::TileType;
-use crate::ubi::run_loop;
+use crate::navigation::{Coordinate, FILE_NAMES, RANK_NAMES, BOARD_HEIGHT, BOARD_HEIGHT_SIGNED, BOARD_WIDTH, Direction};
+
+use barragoon_engine::common::tiles::TileType;
 
 pub mod application;
-pub mod navigation;
-pub mod pieces;
-pub mod tiles;
 pub mod ubi;
 
+use ubi::run_loop;
 use crate::pieces::barragoon::{Alignment, BarragoonFace};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -58,6 +56,8 @@ impl Tile {
     }
 }
 
+
+// no need to wrap Barragoons and TIles into seperate structs. They can just be fat enums... ? hmm, but then there are no seperate impls for captures and stuff
 impl SquareContent {
     pub const fn as_fen_char(&self) -> char {
         match self {
@@ -83,10 +83,6 @@ impl SquareContent {
     }
 }
 
-const BOARD_WIDTH: u8 = 7;
-const BOARD_HEIGHT: u8 = 9;
-#[allow(clippy::cast_possible_wrap)]
-const BOARD_HEIGHT_SIGNED: i8 = BOARD_HEIGHT as i8;
 const INITIAL_FEN_STRING: &str = "1vd1dv1/2zdz2/7/1x3x1/x1x1x1x/1x3x1/7/2ZDZ2/1VD1DV1";
 const EMPTY_FEN_STRING: &str = "7/7/7/7/7/7/7/7/7";
 
@@ -488,9 +484,6 @@ impl std::fmt::Display for Game {
         write!(f, "")
     }
 }
-
-const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-const FILE_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct BarragoonPlacement {

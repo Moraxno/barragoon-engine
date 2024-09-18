@@ -1,8 +1,15 @@
 use strum_macros::EnumIter;
-
 use std::ops;
 
-use crate::{BOARD_HEIGHT, BOARD_WIDTH, FILE_NAMES, RANK_NAMES};
+pub const RANK_NAMES: [char; BOARD_HEIGHT as usize] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+pub const FILE_NAMES: [char; BOARD_WIDTH as usize] = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+
+pub const BOARD_WIDTH: u8 = 7;
+pub const BOARD_HEIGHT: u8 = 9;
+
+#[allow(clippy::cast_possible_wrap)]
+pub const BOARD_HEIGHT_SIGNED: i8 = BOARD_HEIGHT as i8;
+
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, EnumIter)]
 pub enum Direction {

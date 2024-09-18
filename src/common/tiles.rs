@@ -1,7 +1,7 @@
 use std::fmt::Write;
 use std::hash::Hash;
 
-use crate::navigation::{Direction, PositionDelta};
+use crate::common::navigation::{Direction, PositionDelta};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
