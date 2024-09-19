@@ -7,9 +7,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = "0.5.6"
 strum = "0.26.3"
 strum_macros = "0.26.4"
+ggez = "0.9.3"
+resvg = "0.43.0"
+usvg = "0.43.0"
 
 [dev-dependencies]
 cargo-llvm-cov = "0.6.11"
