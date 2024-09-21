@@ -42,15 +42,16 @@ impl UbiHandler {
 
             write!(
                 answer,
-                "id name {} v{}.{}.{} author {}",
+                "id name {} v{}.{}.{}",
                 application::ENGINE_NAME,
                 application::VERSION_MAJOR,
                 application::VERSION_MINOR,
                 application::VERSION_PATCH,
-                application::AUTHOR_NAME
             )
             .unwrap();
             answers.push(answer);
+            let author = application::AUTHOR_NAME;
+            answers.push(format!("id author {author}"));
             answers.push(String::from("ubiok"));
         }
 
@@ -80,6 +81,7 @@ impl UbiHandler {
 
         if start_position_mode == Some("startpos") {
             self.game = Game::new();
+            answers.push("gameok".to_string());
         } else if start_position_mode == Some("fen") {
             let game_result = Game::from_fen(Self::collect_residual_fen_args(&mut args).as_str());
             match game_result {
@@ -142,6 +144,7 @@ where
                 "isready" => handler.isready(),
                 "position" => handler.position(args),
                 "exit" => std::process::exit(0),
+                
                 _ => vec![String::from("Unknown command")],
             };
 

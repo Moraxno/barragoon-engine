@@ -2,6 +2,7 @@ use std::slice::Iter;
 
 use crate::common::navigation::Direction;
 use crate::common::tiles::TileType;
+use crate::common::tiles::Renderable;
 
 type Dir = Direction;
 
@@ -126,5 +127,28 @@ impl BarragoonFace {
             BarragoonFace::ForceTurn,
         ];
         FACES.iter()
+    }
+}
+
+impl Renderable for BarragoonFace {
+    fn as_cli_char(&self) -> char {
+        match self {
+            Self::Blocking => '⨯',
+            Self::Straight { alignment: Alignment::Horizontal } => '↔',
+            Self::Straight { alignment: Alignment::Vertical } => '↕',
+            Self::OneWay { direction: Direction::South }  => '↓',
+            Self::OneWay { direction: Direction::North }  => '↑',
+            Self::OneWay { direction: Direction::West } => '←',
+            Self::OneWay { direction: Direction::East } => '→',
+            Self::OneWayTurnLeft { direction: Direction::South } => '⬐',
+            Self::OneWayTurnLeft { direction: Direction::North } => '⬏',
+            Self::OneWayTurnLeft { direction: Direction::East } => '↳',
+            Self::OneWayTurnLeft { direction: Direction::West } => '↰',
+            Self::OneWayTurnRight { direction: Direction::South } => '⬎',
+            Self::OneWayTurnRight { direction: Direction::North } => '⬑',
+            Self::OneWayTurnRight { direction: Direction::East } => '↱',
+            Self::OneWayTurnRight { direction: Direction::West } => '↵',
+            Self::ForceTurn => '⯌'
+        }
     }
 }

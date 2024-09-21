@@ -6,7 +6,7 @@ use barragoon_engine::common::{navigation, tiles, pieces};
 
 use crate::navigation::{Coordinate, FILE_NAMES, RANK_NAMES, BOARD_HEIGHT, BOARD_HEIGHT_SIGNED, BOARD_WIDTH, Direction};
 
-use barragoon_engine::common::tiles::TileType;
+use barragoon_engine::common::tiles::{Renderable, TileType};
 
 pub mod application;
 pub mod ubi;
@@ -52,6 +52,33 @@ impl Tile {
                 TileType::Three => 'd',
                 TileType::Four => 'v',
             },
+        }
+    }
+}
+
+impl Renderable for Tile {
+    fn as_cli_char(&self) -> char {
+        match self.player {
+            Player::White => match self.tile_type {
+                TileType::Two => '➋',
+                TileType::Three => '➌',
+                TileType::Four => '➍',
+            },
+            Player::Brown => match self.tile_type {
+                TileType::Two => '➁',
+                TileType::Three => '➂',
+                TileType::Four => '➃',
+            },
+        }
+    }
+}
+
+impl Renderable for SquareContent {
+    fn as_cli_char(&self) -> char {
+        match self {
+            Self::Empty => ' ',
+            Self::Tile(tile) => tile.as_cli_char(),
+            Self::Barragoon(face) => face.as_cli_char(),
         }
     }
 }
@@ -457,23 +484,23 @@ impl std::fmt::Display for Game {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "  ")?;
         for _ in 0..BOARD_WIDTH {
-            write!(f, "+---")?;
+            write!(f, "┼───")?;
         }
-        writeln!(f, "+")?;
+        writeln!(f, "┼")?;
 
         for irank in (0..BOARD_HEIGHT as usize).rev() {
             let rank = self.board[irank];
             f.write_fmt(format_args!("{} ", RANK_NAMES[irank]))?;
             for square in rank {
-                write!(f, "| ")?;
-                f.write_fmt(format_args!("{}", square.as_fen_char()))?;
+                write!(f, "│ ")?;
+                f.write_fmt(format_args!("{}", square.as_cli_char()))?;
                 write!(f, " ")?;
             }
-            write!(f, "|\n  ")?;
+            write!(f, "│\n  ")?;
             for _ in 0..BOARD_WIDTH {
-                write!(f, "+---")?;
+                write!(f, "┼───")?;
             }
-            writeln!(f, "+")?;
+            writeln!(f, "┼")?;
         }
 
         write!(f, "  ")?;
@@ -550,11 +577,14 @@ impl std::fmt::Display for BoardMove {
 fn main() {
     println!("Hello, world!");
 
-    let game = Game::new();
+    let mut game: Game = Game::new();
+    game.set_content(&Coordinate { rank: 4, file: 2 }, &SquareContent::Barragoon(BarragoonFace::OneWayTurnLeft { direction: Direction::South }));
+    game.set_content(&Coordinate { rank: 5, file: 6 }, &SquareContent::Barragoon(BarragoonFace::Straight { alignment: Alignment::Vertical }));
     println!("{game:?}");
     println!("{game}");
     println!("{INITIAL_FEN_STRING}");
     println!("{}", game.as_fen());
+
 
     for tile_move in game.valid_moves() {
         println!("{tile_move}");

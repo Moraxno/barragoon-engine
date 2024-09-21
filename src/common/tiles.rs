@@ -5,6 +5,11 @@ use crate::common::navigation::{Direction, PositionDelta};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+pub trait Renderable {
+    fn as_cli_char(&self) -> char;
+}
+
+
 #[derive(Debug, Copy, Clone, PartialEq, EnumIter, Eq, Hash)]
 pub enum TileType {
     Two,
