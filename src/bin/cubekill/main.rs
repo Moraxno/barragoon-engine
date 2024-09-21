@@ -16,8 +16,8 @@ use crate::pieces::barragoon::{Alignment, BarragoonFace};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 enum Player {
-    White,
-    Brown,
+    Light,
+    Dark,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -42,12 +42,12 @@ struct Tile {
 impl Tile {
     pub const fn as_fen_char(&self) -> char {
         match self.player {
-            Player::White => match self.tile_type {
+            Player::Light => match self.tile_type {
                 TileType::Two => 'Z',
                 TileType::Three => 'D',
                 TileType::Four => 'V',
             },
-            Player::Brown => match self.tile_type {
+            Player::Dark => match self.tile_type {
                 TileType::Two => 'z',
                 TileType::Three => 'd',
                 TileType::Four => 'v',
@@ -59,12 +59,12 @@ impl Tile {
 impl Renderable for Tile {
     fn as_cli_char(&self) -> char {
         match self.player {
-            Player::White => match self.tile_type {
+            Player::Light => match self.tile_type {
                 TileType::Two => '➋',
                 TileType::Three => '➌',
                 TileType::Four => '➍',
             },
-            Player::Brown => match self.tile_type {
+            Player::Dark => match self.tile_type {
                 TileType::Two => '➁',
                 TileType::Three => '➂',
                 TileType::Four => '➃',
@@ -221,27 +221,27 @@ impl Game {
             let obj: FenParseObject = match c {
                 'Z' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Two,
-                    player: Player::White,
+                    player: Player::Light,
                 })),
                 'z' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Two,
-                    player: Player::Brown,
+                    player: Player::Dark,
                 })),
                 'D' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Three,
-                    player: Player::White,
+                    player: Player::Light,
                 })),
                 'd' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Three,
-                    player: Player::Brown,
+                    player: Player::Dark,
                 })),
                 'V' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Four,
-                    player: Player::White,
+                    player: Player::Light,
                 })),
                 'v' => Fpo::Square(SC::Tile(Tile {
                     tile_type: TileType::Four,
-                    player: Player::Brown,
+                    player: Player::Dark,
                 })),
                 '+' => Fpo::Square(SC::Barragoon(Bf::ForceTurn)),
                 '|' => Fpo::Square(SC::Barragoon(Bf::Straight { alignment: Ba::Vertical })),
@@ -302,7 +302,7 @@ impl Game {
         // todo: initialize player from fen string
         Ok(Self {
             board,
-            current_player: Player::White,
+            current_player: Player::Light,
         })
     }
 
@@ -624,14 +624,14 @@ mod tests {
             *game.get_content(&Coordinate::new(0, 1)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(0, 2)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(0, 3)), SquareContent::Empty);
@@ -639,14 +639,14 @@ mod tests {
             *game.get_content(&Coordinate::new(0, 4)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(0, 5)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(0, 6)), SquareContent::Empty);
@@ -658,21 +658,21 @@ mod tests {
             *game.get_content(&Coordinate::new(1, 2)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(1, 3)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(1, 4)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
-                player: Player::White
+                player: Player::Light
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(1, 5)), SquareContent::Empty);
@@ -746,21 +746,21 @@ mod tests {
             *game.get_content(&Coordinate::new(7, 2)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(7, 3)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(7, 4)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(7, 5)), SquareContent::Empty);
@@ -772,14 +772,14 @@ mod tests {
             *game.get_content(&Coordinate::new(8, 1)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(8, 2)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(8, 3)), SquareContent::Empty);
@@ -787,14 +787,14 @@ mod tests {
             *game.get_content(&Coordinate::new(8, 4)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(
             *game.get_content(&Coordinate::new(8, 5)),
             SquareContent::Tile(Tile {
                 tile_type: TileType::Four,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
         assert_eq!(*game.get_content(&Coordinate::new(8, 6)), SquareContent::Empty);
@@ -822,7 +822,7 @@ mod tests {
         let stop_pos = Coordinate { rank: 3, file: 2 };
         let tile = Tile {
             tile_type: TileType::Two,
-            player: Player::White,
+            player: Player::Light,
         };
         let board_move = BoardMove::Straight {
             start: start_pos,
@@ -844,7 +844,7 @@ mod tests {
         let stop_pos = Coordinate { rank: 8, file: 2 };
         let tile = Tile {
             tile_type: TileType::Two,
-            player: Player::White,
+            player: Player::Light,
         };
         let board_move = BoardMove::Straight {
             start: start_pos,
@@ -859,7 +859,7 @@ mod tests {
             g.get_content(&stop_pos),
             &SC::Tile(Tile {
                 tile_type: TileType::Three,
-                player: Player::Brown
+                player: Player::Dark
             })
         );
     }
@@ -880,7 +880,7 @@ mod tests {
                 let mut game = Game::empty();
                 game.board[4][3] = SC::Tile(Tile {
                     tile_type: $type,
-                    player: Player::White,
+                    player: Player::Light,
                 });
                 let moves = game.valid_moves();
 
@@ -904,7 +904,7 @@ mod tests {
         let mut game = Game::empty();
         game.board[4][3] = SC::Tile(Tile {
             tile_type: TileType::Two,
-            player: Player::White,
+            player: Player::Light,
         });
         game.board[4][1] = SC::Barragoon(BarragoonFace::ForceTurn);
 
@@ -924,7 +924,7 @@ mod tests {
             &Coordinate::new(4, 3),
             &SquareContent::Tile(Tile {
                 tile_type: TileType::Two,
-                player: Player::White,
+                player: Player::Light,
             }),
         );
         game.set_content(&Coordinate::new(2, 3), &SquareContent::Barragoon(BarragoonFace::Blocking));
@@ -941,7 +941,7 @@ mod tests {
 
         game.board[4][3] = SC::Tile(Tile {
             tile_type: TileType::Three,
-            player: Player::White,
+            player: Player::Light,
         });
 
         for [file_idx, rank_idx] in [[4, 0], [3, 1], [2, 2], [1, 3]] {
